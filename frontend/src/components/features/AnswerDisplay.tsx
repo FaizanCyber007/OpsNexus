@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from "react";
 
+import { Meter } from "@/components/ui/Meter";
 import { Shimmer } from "@/components/ui/Shimmer";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useDocumentPolling } from "@/hooks/useDocumentPolling";
 import { apiClient } from "@/lib/apiClient";
-import type { Answer } from "@/lib/types";
+import type { Answer, Document } from "@/lib/types";
 
 interface AnswerDisplayProps {
   documentId: string;
+  fileName: string;
+  onStatusChange?: (status: Document["status"]) => void;
 }
 
-export function AnswerDisplay({ documentId }: AnswerDisplayProps) {
-  const { document, isPolling } = useDocumentPolling(documentId);
+export function AnswerDisplay({ documentId, fileName, onStatusChange }: AnswerDisplayProps) {
+  const { document, isPolling } = useDocumentPolling(documentId, onStatusChange);
   const [answers, setAnswers] = useState<Answer[] | null>(null);
 
   useEffect(() => {
@@ -23,47 +27,50 @@ export function AnswerDisplay({ documentId }: AnswerDisplayProps) {
       .catch(() => setAnswers([]));
   }, [document?.status, documentId]);
 
-  if (document?.status === "failed") {
-    return (
-      <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-        Processing failed for this document.
-      </div>
-    );
-  }
-
-  if (isPolling || document?.status !== "completed" || answers === null) {
-    return (
-      <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/5 p-4">
-        <Shimmer className="h-4 w-2/3" />
-        <Shimmer className="h-4 w-full" />
-        <Shimmer className="h-4 w-5/6" />
-      </div>
-    );
-  }
-
-  if (answers.length === 0) {
-    return (
-      <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50">
-        No answer produced for this document.
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-2">
-      {answers.map((answer) => (
-        <div
-          key={answer.id}
-          className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/90"
-        >
-          <p>{answer.content}</p>
-          {answer.confidence_score !== null && (
-            <p className="mt-2 text-xs text-white/50">
-              Confidence: {Math.round(answer.confidence_score * 100)}%
-            </p>
-          )}
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="truncate text-sm font-medium text-white/90">{fileName}</span>
+        <StatusBadge status={document?.status ?? "pending"} />
+      </div>
+
+      {document?.status === "failed" && (
+        <p className="text-sm text-status-critical">
+          Processing failed for this document.
+        </p>
+      )}
+
+      {(isPolling || document?.status === "pending" || document?.status === "processing") && (
+        <div className="flex flex-col gap-2">
+          <Shimmer className="h-3.5 w-2/3" />
+          <Shimmer className="h-3.5 w-full" />
+          <Shimmer className="h-3.5 w-5/6" />
         </div>
-      ))}
+      )}
+
+      {document?.status === "completed" && answers === null && (
+        <div className="flex flex-col gap-2">
+          <Shimmer className="h-3.5 w-2/3" />
+          <Shimmer className="h-3.5 w-full" />
+        </div>
+      )}
+
+      {document?.status === "completed" && answers !== null && answers.length === 0 && (
+        <p className="text-sm text-white/50">No answer produced for this document.</p>
+      )}
+
+      {document?.status === "completed" && answers !== null && answers.length > 0 && (
+        <div className="flex flex-col gap-4">
+          {answers.map((answer) => (
+            <div key={answer.id} className="flex flex-col gap-3">
+              <p className="text-sm leading-relaxed text-white/90">{answer.content}</p>
+              {answer.confidence_score !== null && (
+                <Meter label="Confidence" value={answer.confidence_score} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
