@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "documents",
     "agents",
     "orchestration",
+    "mcp_host",
 ]
 
 MIDDLEWARE = [
