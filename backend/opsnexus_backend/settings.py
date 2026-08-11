@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "agents",
     "orchestration",
     "mcp_host",
+    "memory",
 ]
 
 MIDDLEWARE = [
