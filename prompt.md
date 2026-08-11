@@ -206,3 +206,58 @@ coming agentic integration work:
   shape a real tool-calling agent loop needs to log into, before any LLM is wired up.
 
 ---
+
+## Prompt 7
+
+```
+[SYSTEM CONTEXT]
+You are the Lead Staff Architect finalizing the Week 5 Scaffold for "OpsNexus".
+- Stack: Python 3, Django 5, PostgreSQL.
+- Goal: Implement the final missing rubric requirements: Tool Registry, Model Client, Memory stubs, and local Dev infrastructure.
+
+[YOUR TASK: FINAL SCAFFOLD COMPLIANCE & INFRASTRUCTURE]
+Execute sequentially and commit after each phase.
+
+1. App 6 - `memory` (Vector Store Stub):
+   - Create app `memory`.
+   - Create `vector_client.py`. Write a stubbed class `ChromaDBClient`. It should contain stubbed methods for `initialize_collection()`, `add_documents()`, and `semantic_search()`. 
+   - Add comments explaining this will interface with local HuggingFace embeddings in Week 6.
+   - Action: Run `black .` and `flake8`. `git add .` && `git commit -m "feat(memory): stub chromadb vector memory client"`
+
+2. Tool Registry & Model Client (`orchestration` app):
+   - In the `orchestration` app, create `model_client.py`. Write a stubbed `LLMFactory` class that returns mock initializations for `get_supervisor_llm()` (Gemini) and `get_worker_llm()` (Groq).
+   - Create `tool_registry.py`. Write a stubbed `ToolRegistry` class that acts as a centralized dictionary to register and fetch LangChain/MCP tools before passing them to the LangGraph agents.
+   - Action: Run `black .` and `flake8`. `git add .` && `git commit -m "feat(orchestration): stub centralized tool registry and model client factory"`
+
+3. Local Infrastructure (`docker-compose.yml`):
+   - At the root of the repository, create a `docker-compose.yml` file.
+   - Configure a `postgres:16` service to run locally for development (mapping port 5432 and setting default dev credentials).
+   - Configure a `redis:alpine` service (prep for Week 6/7 Celery background processing).
+   - Action: `git add .` && `git commit -m "chore(infra): add docker-compose for local postgres and redis scaffolding"`
+
+4. Final Rubric Verification:
+   - Append to `prompts.md`. Note that the Tool Registry, Model Client, and Memory layers were explicitly modularized to separate concerns before Week 6 feature development.
+   - Action: `git commit -m "docs: finalize week 5 stub requirements in prompt logs"`
+
+[EXECUTION CONSTRAINTS]
+Ensure zero code redundancy. The `docker-compose.yml` must use standard, secure local defaults matching the Django `.env.example`.
+```
+
+### Final rubric compliance note
+
+The Tool Registry (`orchestration/tool_registry.py`), Model Client (`orchestration/model_client.py`),
+and Memory layer (`memory/vector_client.py`) were explicitly modularized into their
+own files/app — rather than, say, inlined into `orchestration/runner.py` — to
+separate concerns before Week 6 feature development: which model a role uses
+(`LLMFactory`), which tools an agent can call (`ToolRegistry`), and how it retrieves
+prior context (`ChromaDBClient`) are three independent axes that Week 6's real
+LangGraph agents will each depend on separately, so keeping them as distinct,
+independently-swappable stubs now avoids a refactor later.
+
+Local dev infrastructure was also consolidated to a single root-level
+`docker-compose.yml` (Postgres + Redis, prepping Week 6/7 Celery background
+processing) rather than leaving a second, redundant compose definition inside
+`backend/` — one canonical source for local infra, matching the "zero code
+redundancy" constraint.
+
+---
