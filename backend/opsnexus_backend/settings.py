@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "core",
     "documents",
     "agents",
+    "orchestration",
 ]
 
 MIDDLEWARE = [
