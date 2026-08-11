@@ -4,11 +4,12 @@ import { useRef, useState, type DragEvent } from "react";
 
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { apiClient, ApiError } from "@/lib/apiClient";
-import type { Document } from "@/lib/types";
+import type { Document, DocumentUploadResponse } from "@/lib/types";
 
 interface DropzoneProps {
   organizationId: string;
   docType?: Document["doc_type"];
+  onUploaded?: (response: DocumentUploadResponse) => void;
 }
 
 interface UploadItem {
@@ -18,7 +19,7 @@ interface UploadItem {
   message?: string;
 }
 
-export function Dropzone({ organizationId, docType = "other" }: DropzoneProps) {
+export function Dropzone({ organizationId, docType = "other", onUploaded }: DropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,7 +29,7 @@ export function Dropzone({ organizationId, docType = "other" }: DropzoneProps) {
     setUploads((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
 
     try {
-      const document = await apiClient.post<Document>("/documents/", {
+      const response = await apiClient.post<DocumentUploadResponse>("/documents/", {
         organization: organizationId,
         doc_type: docType,
         file_path: file.name,
@@ -36,10 +37,11 @@ export function Dropzone({ organizationId, docType = "other" }: DropzoneProps) {
       setUploads((prev) =>
         prev.map((item) =>
           item.id === id
-            ? { ...item, status: "done", message: document.status }
+            ? { ...item, status: "done", message: response.status }
             : item,
         ),
       );
+      onUploaded?.(response);
     } catch (error) {
       const message =
         error instanceof ApiError ? `Upload failed (${error.status})` : "Upload failed";

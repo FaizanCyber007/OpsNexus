@@ -3,9 +3,12 @@ import logging
 import threading
 
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from agents.models import Answer
+from agents.serializers import AnswerSerializer
 from orchestration.runner import trigger_mock_agent_run
 
 from .models import Document
@@ -40,3 +43,10 @@ class DocumentViewSet(ModelViewSet):
             {"status": "processing", "document_id": document.id},
             status=status.HTTP_202_ACCEPTED,
         )
+
+    @action(detail=True, methods=["get"])
+    def answers(self, request, pk=None):
+        answers = Answer.objects.filter(agent_run__document_id=pk).order_by(
+            "created_at"
+        )
+        return Response(AnswerSerializer(answers, many=True).data)

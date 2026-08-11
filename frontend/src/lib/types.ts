@@ -6,6 +6,11 @@ export type DocumentType =
 
 export type DocumentStatus = "pending" | "processing" | "completed" | "failed";
 
+export interface DocumentUploadResponse {
+  status: "processing";
+  document_id: string;
+}
+
 export interface Document {
   id: string;
   organization: string;

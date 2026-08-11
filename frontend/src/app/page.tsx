@@ -1,13 +1,5 @@
-import { Sidebar } from "@/components/layout/Sidebar";
-import { DocumentUploadCard } from "@/components/features/DocumentUploadCard";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return (
-    <div className="flex flex-1">
-      <Sidebar />
-      <main className="flex flex-1 items-center justify-center p-10">
-        <DocumentUploadCard />
-      </main>
-    </div>
-  );
+  redirect("/dashboard");
 }

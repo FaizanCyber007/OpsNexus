@@ -3,10 +3,12 @@
 import { useState } from "react";
 
 import { Card } from "@/components/ui/Card";
+import { AnswerDisplay } from "@/components/features/AnswerDisplay";
 import { Dropzone } from "@/components/features/Dropzone";
 
 export function DocumentUploadCard() {
   const [organizationId, setOrganizationId] = useState("");
+  const [documentIds, setDocumentIds] = useState<string[]>([]);
 
   return (
     <Card className="flex w-full max-w-lg flex-col gap-4">
@@ -20,7 +22,21 @@ export function DocumentUploadCard() {
           className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-indigo-400 focus:outline-none"
         />
       </label>
-      <Dropzone organizationId={organizationId} />
+      <Dropzone
+        organizationId={organizationId}
+        onUploaded={(response) =>
+          setDocumentIds((prev) => [...prev, response.document_id])
+        }
+      />
+
+      {documentIds.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium text-white/70">Results</h2>
+          {documentIds.map((id) => (
+            <AnswerDisplay key={id} documentId={id} />
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
