@@ -10,7 +10,7 @@ from rest_framework.viewsets import ModelViewSet
 from agents.models import Answer
 from agents.serializers import AnswerSerializer
 from memory.vector_client import ingest_document
-from orchestration.runner import trigger_mock_agent_run
+from orchestration.agent_runner import trigger_agent_run
 
 from .models import Document
 from .serializers import DocumentSerializer
@@ -27,9 +27,9 @@ def _run_mock_agent_in_background(document_id) -> None:
         logger.exception("Memory ingestion failed for document %s", document_id)
 
     try:
-        asyncio.run(trigger_mock_agent_run(document_id))
+        asyncio.run(trigger_agent_run(document_id))
     except Exception:
-        logger.exception("Mock agent run failed for document %s", document_id)
+        logger.exception("Agent run failed for document %s", document_id)
 
 
 class DocumentViewSet(ModelViewSet):

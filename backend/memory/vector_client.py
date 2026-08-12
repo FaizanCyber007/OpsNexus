@@ -84,12 +84,12 @@ def _get_text_splitter():
     return RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
 
 
-def _load_document_text(file_path: str) -> list[str]:
-    """Extract text chunks from a file on disk, dispatching by extension.
+def extract_text(file_path: str) -> str:
+    """Extract raw text from a file on disk, dispatching by extension.
 
     Handles PDFs and Word docs via LangChain loaders; falls back to a plain
     UTF-8 read for other text-bearing files (.txt, .md, .csv, .log, ...).
-    Returns an empty list (rather than raising) for undecodable/binary files.
+    Returns an empty string (rather than raising) for undecodable/binary files.
     """
     extension = os.path.splitext(file_path)[1].lower()
 
@@ -112,8 +112,14 @@ def _load_document_text(file_path: str) -> list[str]:
                 "Skipping memory ingestion for %s: not a decodable text file",
                 file_path,
             )
-            return []
+            return ""
 
+    return text
+
+
+def _load_document_text(file_path: str) -> list[str]:
+    """Extract and chunk a file's text for embedding/ingestion."""
+    text = extract_text(file_path)
     if not text.strip():
         return []
 

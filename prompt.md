@@ -307,3 +307,72 @@ and upserts the chunks into a collection named `org_<organization_id>`. This run
 in the existing background thread in `documents/views.py`, wrapped in its own
 try/except so an ingestion failure never blocks the existing mock `AgentRun`
 pipeline, and executes before `trigger_mock_agent_run` as specified.
+
+---
+
+## Prompt 9
+
+```
+[SYSTEM CONTEXT]
+You are the Lead AI Engineer for "OpsNexus".
+- Stack: Python 3, LangGraph, Groq (Llama-3), Gemini 1.5 Flash.
+
+[YOUR TASK: CORE AI FEATURE DEVELOPMENT]
+1. LLM Client Factory (`orchestration/model_client.py`):
+   - Implement `get_supervisor_llm()` using `ChatGoogleGenerativeAI` (Gemini Flash).
+   - Implement `get_worker_llm()` using `ChatGroq` (Llama-3 70B).
+   - Ensure graceful fallbacks or error messages if API keys are missing.
+2. Tool Registry (`orchestration/tool_registry.py`):
+   - Create a real LangChain `@tool` named `search_company_knowledge`. It must use the `ChromaDBClient` from Session 1 to perform semantic searches based on `organization_id`.
+3. LangGraph Engine (`orchestration/agent_runner.py` & `graph.py`):
+   - Replace the stubbed router. Use the Gemini Supervisor to classify the document. If it's an RFP, route to the Sales Worker.
+   - Build the Sales Worker node using Groq. Equip it with the `search_company_knowledge` tool.
+   - The Sales Worker must read the document, query ChromaDB for past answers, and synthesize a response.
+4. Input/Output Validation:
+   - Use Pydantic to strictly type the output of the LangGraph swarm to ensure it returns a structured JSON answer to save into the `Answer` database model.
+
+[EXECUTION CONSTRAINTS]
+Run `black .` and `flake8`. Ensure no API keys are hardcoded.
+Commit: `git add . && git commit -m "feat: implement primary LangGraph AI feature with Gemini and Groq"`
+```
+
+`orchestration/model_client.py`'s `LLMFactory` now returns real clients:
+`get_supervisor_llm()` builds `ChatGoogleGenerativeAI`, `get_worker_llm()` builds
+`ChatGroq`, both reading their API key from the environment only (never
+hardcoded) and raising a new `LLMConfigurationError` with an actionable message
+if the key is absent — checked lazily inside each getter so the app still boots
+without keys. Both model names in the task spec ("Gemini 1.5 Flash", "Llama-3
+70B") have since been retired by their providers; confirmed the current
+equivalents live against each provider's real model-list endpoint before
+picking `gemini-2.5-flash` and `llama-3.3-70b-versatile`.
+
+`orchestration/tool_registry.py` gained `build_search_company_knowledge_tool
+(organization_id)`, a factory returning a real `@tool`-decorated LangChain tool
+bound to one organization, backed by `ChromaDBClient.semantic_search` from the
+memory layer — bound per-run rather than pre-registered in the generic
+`ToolRegistry`, since the LLM shouldn't need to know the org's UUID itself.
+
+`orchestration/graph.py` (new) builds the real `StateGraph`: a `supervisor`
+node uses the Gemini client with `.with_structured_output(ClassificationResult)`
+to classify the document into one of four routes; a conditional edge sends
+`sales_rfp` documents to a `sales_worker` node built with LangGraph's
+`create_react_agent` (Groq client + `search_company_knowledge` tool +
+`response_format=StructuredAnswer`), giving real tool-calling and strict
+Pydantic-typed output in one prebuilt, with no hand-rolled tool loop needed.
+
+`orchestration/agent_runner.py` (new) is the real entry point
+(`trigger_agent_run`), replacing `orchestration.runner.trigger_mock_agent_run`
+as what `documents/views.py` calls. Per your confirmed choice, only `sales_rfp`
+gets the real Worker this round — the other three routes, and any failure
+(including missing API keys, via `LLMConfigurationError`), fall back to the
+existing `trigger_mock_agent_run` unchanged, so the pipeline always completes
+and the fallback is a real functioning path, not just an error message.
+
+Verified live end-to-end with your real `GOOGLE_API_KEY`/`GROQ_API_KEY`: the
+graceful-fallback path (keys unset) produces a failed real `AgentRun` plus a
+succeeded mock one; a security-questionnaire document classifies as
+`sales_rfp` and the Groq worker's `search_company_knowledge` call retrieves
+and cites the document's own ingested chunks in its structured answer; an
+invoice-shaped document correctly classifies as `invoice_reconciliation` and
+skips the worker, leaving `answer` unset so `agent_runner` delegates to the
+mock path as designed.
