@@ -261,3 +261,49 @@ processing) rather than leaving a second, redundant compose definition inside
 redundancy" constraint.
 
 ---
+
+## Prompt 8
+
+```
+[SYSTEM CONTEXT]
+You are the Lead Full-Stack Engineer for "OpsNexus".
+- Stack: Next.js 14, Django 5, DRF, ChromaDB. (Linter: `black` and `flake8`).
+
+[YOUR TASK: FIX UPLOADER & IMPLEMENT MEMORY LAYER]
+1. Fix Document Uploader (Frontend & Backend):
+   - Analyze the Next.js Dropzone component and `apiClient.ts`. Ensure it correctly constructs a `FormData` object and omits the `Content-Type` header (so the browser sets the multipart boundary automatically).
+   - Analyze the Django `Document` model and ViewSet. Ensure `MEDIA_URL` and `MEDIA_ROOT` are configured in `settings.py` and `urls.py`. Ensure the ViewSet handles `request.FILES` correctly via a `MultiPartParser`.
+2. Memory Layer Integration (`memory/vector_client.py`):
+   - Replace the stubbed ChromaDB client with real logic.
+   - Use `PyPDFLoader` and `RecursiveCharacterTextSplitter` to extract text from the uploaded `Document.file_path`.
+   - Embed the chunks using the free `HuggingFaceEmbeddings` (`all-MiniLM-L6-v2`) and store them in a local Chroma collection specific to the `organization_id`.
+3. End-to-End Trigger:
+   - When a `Document` is uploaded successfully, run the embedding process before calling the agent runner stub.
+
+[EXECUTION CONSTRAINTS]
+Run `black .` and `flake8`. Fix any bugs autonomously.
+Commit: `git add . && git commit -m "fix: resolve document uploader and implement ChromaDB memory ingestion"`
+```
+
+The Dropzone never actually uploaded a file before this: it sent a JSON body with
+`file_path` set to just the browser-visible filename string, no bytes ever left
+the client, and `Document` had no `FileField` to receive them on the backend even
+if it had. Fixed end-to-end: `Dropzone.tsx` now builds a real `FormData` (file
+included) and `apiClient.ts` skips the JSON `Content-Type` header for `FormData`
+bodies so the browser sets the multipart boundary; `Document` gained a `file`
+`FileField` (`file_path` is now derived from it rather than client-supplied), and
+`MEDIA_URL`/`MEDIA_ROOT` are wired up in `settings.py`/`urls.py`.
+
+`memory/vector_client.py`'s `ChromaDBClient` is no longer a stub: it wraps a
+per-organization `Chroma` collection (`langchain-chroma`, persisted under
+`backend/chroma_data/`) embedded locally via `HuggingFaceEmbeddings`
+(`all-MiniLM-L6-v2`, `langchain-huggingface`) — no paid API calls. A new
+`ingest_document()` function extracts text (`PyPDFLoader` for `.pdf`,
+`Docx2txtLoader` for `.docx`, a plain UTF-8 read for other text-bearing files,
+skipping undecodable/binary files with a logged warning rather than failing the
+upload — confirmed with the user that ingestion should cover any file with
+extractable text, not just PDFs), splits it with `RecursiveCharacterTextSplitter`,
+and upserts the chunks into a collection named `org_<organization_id>`. This runs
+in the existing background thread in `documents/views.py`, wrapped in its own
+try/except so an ingestion failure never blocks the existing mock `AgentRun`
+pipeline, and executes before `trigger_mock_agent_run` as specified.

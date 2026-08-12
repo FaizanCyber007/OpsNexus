@@ -30,11 +30,15 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
     setUploads((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
 
     try {
-      const response = await apiClient.post<DocumentUploadResponse>("/documents/", {
-        organization: organizationId,
-        doc_type: docType,
-        file_path: file.name,
-      });
+      const formData = new FormData();
+      formData.append("organization", organizationId);
+      formData.append("doc_type", docType);
+      formData.append("file", file);
+
+      const response = await apiClient.post<DocumentUploadResponse>(
+        "/documents/",
+        formData,
+      );
       setUploads((prev) =>
         prev.map((item) => (item.id === id ? { ...item, status: "done" } : item)),
       );

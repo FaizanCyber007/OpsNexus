@@ -133,6 +133,13 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# User-uploaded document storage
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# Local persistence dir for the memory app's Chroma collections
+CHROMA_PERSIST_DIR = BASE_DIR / "chroma_data"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

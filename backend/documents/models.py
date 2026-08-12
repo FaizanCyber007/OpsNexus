@@ -27,7 +27,8 @@ class Document(BaseModel):
         choices=Status.choices,
         default=Status.PENDING,
     )
-    file_path = models.CharField(max_length=1024)
+    file = models.FileField(upload_to="documents/%Y/%m/%d/", blank=True, null=True)
+    file_path = models.CharField(max_length=1024, blank=True, default="")
 
     def __str__(self):
         return f"{self.get_doc_type_display()} ({self.status})"

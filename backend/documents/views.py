@@ -9,6 +9,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from agents.models import Answer
 from agents.serializers import AnswerSerializer
+from memory.vector_client import ingest_document
 from orchestration.runner import trigger_mock_agent_run
 
 from .models import Document
@@ -18,6 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 def _run_mock_agent_in_background(document_id) -> None:
+    document = Document.objects.get(id=document_id)
+
+    try:
+        ingest_document(document)
+    except Exception:
+        logger.exception("Memory ingestion failed for document %s", document_id)
+
     try:
         asyncio.run(trigger_mock_agent_run(document_id))
     except Exception:
@@ -32,6 +40,10 @@ class DocumentViewSet(ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         document = serializer.save()
+
+        if document.file and not document.file_path:
+            document.file_path = document.file.name
+            document.save(update_fields=["file_path"])
 
         threading.Thread(
             target=_run_mock_agent_in_background,
