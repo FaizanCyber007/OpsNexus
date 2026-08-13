@@ -376,3 +376,72 @@ and cites the document's own ingested chunks in its structured answer; an
 invoice-shaped document correctly classifies as `invoice_reconciliation` and
 skips the worker, leaving `answer` unset so `agent_runner` delegates to the
 mock path as designed.
+
+---
+
+## Prompt 10
+
+```
+[SYSTEM CONTEXT]
+You are the Full-Stack Architect for "OpsNexus".
+- Stack: Next.js 14, Django 5, Anthropic MCP SDK.
+
+[YOUR TASK: MCP INTEGRATION & UI WIRING]
+1. MCP Server Implementation (`mcp_host/server.py`):
+   - Replace the MCP stub. Build a real tool `get_internal_pricing_policy()` that returns a hardcoded mock JSON string representing the company's pricing rules.
+   - Create the MCP Client wrapper in Django so the Groq Worker agent can securely call this tool during the LangGraph loop.
+2. User-Facing Surface Wired to Live Logic:
+   - Update the Next.js Dashboard (`app/dashboard/page.tsx`).
+   - Ensure the UI beautifully renders the *real* structured JSON output from the AI (e.g., displaying the generated RFP answers in a clean card layout).
+   - Add error boundaries: if the AI fails (e.g., API rate limit), Next.js must catch the 400/500 error from Django and show a graceful error toast, not a crashed white screen.
+
+[EXECUTION CONSTRAINTS]
+Run `npm run lint` and `flake8`. Verify the full E2E path (Upload -> Agent -> UI).
+Commit: `git add . && git commit -m "feat: integrate MCP server tools and wire live AI logic to Next.js UI"`
+```
+
+`mcp_host/server.py`'s `mock_tool` is now `get_internal_pricing_policy()`, returning a
+hardcoded JSON pricing-tiers document (Starter/Growth/Enterprise). The obvious
+"MCP → LangChain tool" bridge, `langchain-mcp-adapters`, turned out to pin
+`mcp<2.0.0` -- incompatible with this repo's `mcp==2.0.0` (which
+`mcp_host/server.py`'s `MCPServer` API requires). Installing it would have forced
+a downgrade that broke the existing server, so `mcp_host/client.py` (new) hand-rolls
+the bridge instead directly against `mcp.ClientSession` -- `mcp_session()` spawns
+the server over stdio, `build_mcp_tools()` wraps each MCP tool as a LangChain
+`@tool`. `orchestration/graph.py`'s `sales_worker_node` (now async, using `.ainvoke`
+throughout) opens that session for the Worker's whole tool-calling lifetime and adds
+the MCP tools alongside `search_company_knowledge`, with a try/except fallback to
+just the search tool if the MCP server is unreachable -- mirroring the missing-API-key
+graceful-degradation pattern already established for the LLM clients.
+
+While reading `documents/views.py` for this task I found a real gap: if the real graph
+*and* its internal mock fallback both raised, nothing ever set `Document.status =
+FAILED` -- the document would stay stuck at its prior status forever with the
+dashboard shimmering indefinitely, no crash but no signal either. Fixed that as part
+of closing the loop on "the frontend must be able to catch and show AI failures."
+
+The dashboard's `AnswerDisplay`/`Meter` card was already built in Week 5 to render
+structured `Answer` data -- now that it's fed real Gemini/Groq output instead of the
+mock, no redesign was needed there. The actual gap was error handling: request
+failures were either inline-only (`Dropzone`) or silently swallowed
+(`useDocumentPolling`, the `/answers/` fetch), and nothing protected against an
+uncaught render crash. Added `app/dashboard/error.tsx`, a Next.js route error
+boundary using the `error`/`retry` props -- confirmed against
+`node_modules/next/dist/docs` per this project's `AGENTS.md` (this app's Next.js
+16.3.0 stabilized `retry` recently; older docs would have said `reset`). Built a small
+`ToastProvider`/`useToast()` (new `contexts/ToastContext.tsx` + `components/ui/Toast.tsx`,
+reusing the existing `status-critical`/`status-warning` color tokens) and wired
+`showError()` into every previously-silent fetch failure, plus the new `status ===
+"failed"` transition, so a genuine AI/backend failure now surfaces as a toast instead
+of a silent hang.
+
+Verified end-to-end: standalone graph invocation confirmed the Worker actually calls
+`get_internal_pricing_policy` and cites its exact figures in the generated answer;
+the full HTTP-upload path (through the real `DocumentViewSet` and background thread)
+produced a correct `ToolCall` + `Answer` in the database; temporarily pointing the MCP
+client at a nonexistent server script confirmed the graceful fallback still produces
+a valid (if less complete) answer using only `search_company_knowledge`; `npm run
+build` and `npx tsc --noEmit` both pass clean. Browser automation (`gstack`'s
+`/browse`) is blocked by this machine's Windows Application Control policy, matching
+what was already found earlier in this project -- verified the rendered dashboard
+HTML directly via `curl` instead.

@@ -4,6 +4,7 @@ import { useRef, useState, type DragEvent } from "react";
 
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useToast } from "@/contexts/ToastContext";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import type { Document, DocumentUploadResponse } from "@/lib/types";
 
@@ -24,6 +25,7 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
   const [isDragging, setIsDragging] = useState(false);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { showError } = useToast();
 
   async function uploadFile(file: File) {
     const id = `${file.name}-${Date.now()}`;
@@ -49,6 +51,7 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
       setUploads((prev) =>
         prev.map((item) => (item.id === id ? { ...item, status: "error", message } : item)),
       );
+      showError(`Couldn't upload "${file.name}" — ${message.toLowerCase()}.`);
     }
   }
 

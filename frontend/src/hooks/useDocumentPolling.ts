@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useToast } from "@/contexts/ToastContext";
 import { apiClient } from "@/lib/apiClient";
 import type { Document } from "@/lib/types";
 
@@ -15,6 +16,7 @@ export function useDocumentPolling(
   const [document, setDocument] = useState<Document | null>(null);
   const [isPolling, setIsPolling] = useState(true);
   const onStatusChangeRef = useRef(onStatusChange);
+  const { showError } = useToast();
 
   useEffect(() => {
     onStatusChangeRef.current = onStatusChange;
@@ -43,7 +45,10 @@ export function useDocumentPolling(
 
         timeoutId = setTimeout(poll, POLL_INTERVAL_MS);
       } catch {
-        if (!cancelled) setIsPolling(false);
+        if (!cancelled) {
+          setIsPolling(false);
+          showError("Lost connection while checking document status.");
+        }
       }
     }
 
@@ -53,7 +58,7 @@ export function useDocumentPolling(
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [documentId]);
+  }, [documentId, showError]);
 
   return { document, isPolling };
 }

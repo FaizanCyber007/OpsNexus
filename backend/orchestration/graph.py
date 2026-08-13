@@ -65,11 +65,11 @@ class GraphState(TypedDict):
     answer: StructuredAnswer | None
 
 
-def supervisor_node(state: GraphState) -> dict:
+async def supervisor_node(state: GraphState) -> dict:
     llm = LLMFactory().get_supervisor_llm().with_structured_output(ClassificationResult)
     document_excerpt = state["document_text"][:MAX_DOCUMENT_CHARS] or "(empty document)"
 
-    result: ClassificationResult = llm.invoke(
+    result: ClassificationResult = await llm.ainvoke(
         [
             ("system", SUPERVISOR_SYSTEM_PROMPT),
             ("user", f"Document content:\n\n{document_excerpt}"),
@@ -78,19 +78,18 @@ def supervisor_node(state: GraphState) -> dict:
     return {"route": result.route, "reasoning": result.reasoning}
 
 
-def sales_worker_node(state: GraphState) -> dict:
+async def _run_sales_worker_agent(
+    document_excerpt: str, tools: list
+) -> StructuredAnswer:
     from langgraph.prebuilt import create_react_agent
 
-    tool = build_search_company_knowledge_tool(state["organization_id"])
     agent = create_react_agent(
         model=LLMFactory().get_worker_llm(),
-        tools=[tool],
+        tools=tools,
         prompt=SALES_WORKER_SYSTEM_PROMPT,
         response_format=StructuredAnswer,
     )
-
-    document_excerpt = state["document_text"][:MAX_DOCUMENT_CHARS] or "(empty document)"
-    result = agent.invoke(
+    result = await agent.ainvoke(
         {
             "messages": [
                 (
@@ -101,8 +100,33 @@ def sales_worker_node(state: GraphState) -> dict:
             ]
         }
     )
+    return result["structured_response"]
 
-    return {"answer": result["structured_response"]}
+
+async def sales_worker_node(state: GraphState) -> dict:
+    import logging
+
+    from mcp_host.client import build_mcp_tools, mcp_session
+
+    logger = logging.getLogger(__name__)
+
+    search_tool = build_search_company_knowledge_tool(state["organization_id"])
+    document_excerpt = state["document_text"][:MAX_DOCUMENT_CHARS] or "(empty document)"
+
+    try:
+        async with mcp_session() as session:
+            mcp_tools = await build_mcp_tools(session)
+            answer = await _run_sales_worker_agent(
+                document_excerpt, [search_tool, *mcp_tools]
+            )
+    except Exception:
+        logger.warning(
+            "MCP server unavailable; Sales Worker running without MCP tools",
+            exc_info=True,
+        )
+        answer = await _run_sales_worker_agent(document_excerpt, [search_tool])
+
+    return {"answer": answer}
 
 
 def _route_after_supervisor(state: GraphState) -> str:

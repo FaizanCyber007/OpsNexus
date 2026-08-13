@@ -30,6 +30,8 @@ def _run_mock_agent_in_background(document_id) -> None:
         asyncio.run(trigger_agent_run(document_id))
     except Exception:
         logger.exception("Agent run failed for document %s", document_id)
+        document.status = Document.Status.FAILED
+        document.save(update_fields=["status"])
 
 
 class DocumentViewSet(ModelViewSet):

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Meter } from "@/components/ui/Meter";
 import { Shimmer } from "@/components/ui/Shimmer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useToast } from "@/contexts/ToastContext";
 import { useDocumentPolling } from "@/hooks/useDocumentPolling";
 import { apiClient } from "@/lib/apiClient";
 import type { Answer, Document } from "@/lib/types";
@@ -16,7 +17,14 @@ interface AnswerDisplayProps {
 }
 
 export function AnswerDisplay({ documentId, fileName, onStatusChange }: AnswerDisplayProps) {
-  const { document, isPolling } = useDocumentPolling(documentId, onStatusChange);
+  const { showError } = useToast();
+  const handleStatusChange = (status: Document["status"]) => {
+    if (status === "failed") {
+      showError(`AI processing failed for "${fileName}".`);
+    }
+    onStatusChange?.(status);
+  };
+  const { document, isPolling } = useDocumentPolling(documentId, handleStatusChange);
   const [answers, setAnswers] = useState<Answer[] | null>(null);
 
   useEffect(() => {
@@ -24,8 +32,11 @@ export function AnswerDisplay({ documentId, fileName, onStatusChange }: AnswerDi
     apiClient
       .get<Answer[]>(`/documents/${documentId}/answers/`)
       .then(setAnswers)
-      .catch(() => setAnswers([]));
-  }, [document?.status, documentId]);
+      .catch(() => {
+        setAnswers([]);
+        showError(`Couldn't load the answer for "${fileName}".`);
+      });
+  }, [document?.status, documentId, fileName, showError]);
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
