@@ -8,3 +8,5 @@ backend/media/
 backend/chroma_data/
 db.sqlite3
 .DS_Store
+backend/.coverage
+backend/.pytest_cache/

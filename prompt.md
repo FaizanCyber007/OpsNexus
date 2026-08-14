@@ -445,3 +445,82 @@ build` and `npx tsc --noEmit` both pass clean. Browser automation (`gstack`'s
 `/browse`) is blocked by this machine's Windows Application Control policy, matching
 what was already found earlier in this project -- verified the rendered dashboard
 HTML directly via `curl` instead.
+
+---
+
+## Prompt 11
+
+```
+[SYSTEM CONTEXT]
+You are the QA Lead for "OpsNexus". We are finalizing Week 6.
+- Stack: Python 3, Pytest, `pytest-django`, `factory_boy`.
+
+[YOUR TASK: TESTING & RUBRIC FINALIZATION]
+1. Pytest Suite (≥70% Core Logic Coverage):
+   - Write comprehensive tests in `orchestration/tests/` and `documents/tests/`.
+   - Test the Document Upload API endpoint (mocking the file).
+   - Test the Deterministic Router / Supervisor logic (mocking the LLM response).
+   - Test the Pydantic Output Validation logic (pass invalid JSON and assert it fails gracefully).
+2. Error Handling Audit:
+   - Scan the `agent_runner.py`. Ensure `try/except` blocks wrap all LLM invocations. If Groq times out, the `Document` status must be updated to "failed", and a clean error saved to the database.
+3. Prompt Log Update:
+   - Append to `prompts.md`. Add a "Week 6: Core Feature Development" section. Log the implementation of LangGraph, the ChromaDB ingestion pipeline, and the Pytest suite.
+
+[EXECUTION CONSTRAINTS]
+Run `pytest --cov=orchestration --cov=documents` (or standard `pytest` if coverage plugin is missing) to ensure tests pass. Run `black .` and `flake8`.
+Commit: `git add . && git commit -m "test: implement core logic test suite and finalize week 6 documentation"`
+```
+
+The audit surfaced a real bug: `sales_worker_node`'s `try/except` wrapped both the MCP
+session setup *and* the actual Groq agent call in one block, so a Groq failure got
+mislogged as "MCP server unavailable" and triggered a pointless retry of the same
+failing call before it finally propagated. Fixed by restructuring with
+`contextlib.AsyncExitStack` -- the MCP session enter + tool listing gets its own narrow
+`try/except` (graceful fallback to `search_company_knowledge` alone), while the actual
+agent invocation is now unambiguous and wraps its own failure into a new
+`SalesWorkerError`, never conflated with MCP availability.
+
+That surfaced a policy question, confirmed with you: two sessions ago, *any* AI failure
+(Gemini or Groq) fell back to the mock pipeline so `Document.status` still landed on
+`completed`. This task explicitly wants a Groq failure to mark the document `failed`.
+Resolution: only a **Worker** (Groq) failure now marks `Document.status = FAILED` with a
+clean error message -- this only fires *after* the Supervisor already classified the
+document `sales_rfp`, so a real answer was owed and didn't silently get swapped for a
+generic mock one. A **Supervisor** (Gemini) failure, or anything unexpected before the
+route is even known, still falls back to mock exactly as before.
+
+Built the actual pytest suite: `backend/pytest.ini` (nothing configured
+`DJANGO_SETTINGS_MODULE` before this, so bare `pytest` couldn't even run), `core/factories.py` /
+`documents/factories.py` / `agents/factories.py` (`factory_boy`, used across every test
+rather than hand-built model instances), and two new test packages --
+`orchestration/tests/` (router, Pydantic schema validation with malformed JSON, the
+Supervisor/Worker LangGraph nodes with the LLM mocked, `LLMFactory`'s missing-key
+errors, the tool registry, `trigger_mock_agent_run`, and `trigger_agent_run`'s full
+branching -- Worker failure, Supervisor failure, unexpected failure, successful
+`sales_rfp`, and non-`sales_rfp` fallback) and `documents/tests/` (replacing the old
+stub `tests.py` -- the upload endpoint with a mocked `SimpleUploadedFile` and the
+background thread patched out, the `answers` action, and the background-thread
+function's own success/ingestion-failure/total-failure paths). 61 tests, 99% coverage
+on `orchestration`/`documents` combined -- well past the 70% target.
+
+### Week 6: Core Feature Development
+
+Summary of what Week 6 (this session plus the two before it) actually built, since
+this task asked for it logged explicitly:
+
+- **LangGraph engine** (`orchestration/graph.py`, `agent_runner.py`, `model_client.py`,
+  `tool_registry.py`): a real Gemini Supervisor node classifies uploaded documents into
+  one of four routes; for `sales_rfp`, a real Groq Sales Worker (LangGraph
+  `create_react_agent`, Pydantic-typed `response_format`) drafts a response using two
+  tools -- `search_company_knowledge` (backed by the org's ChromaDB collection) and the
+  MCP-hosted `get_internal_pricing_policy`. Every other route, and any Supervisor-side
+  failure, falls back to the pre-existing deterministic mock pipeline so the system
+  always completes; a Worker-side failure now fails cleanly instead.
+- **ChromaDB ingestion pipeline** (`memory/vector_client.py`): uploaded documents are
+  text-extracted (PDF/docx/plain-text), chunked, embedded locally via
+  `HuggingFaceEmbeddings` (no paid API), and stored in a per-organization Chroma
+  collection, run automatically in the background right after upload and before the
+  agent pipeline -- this is what `search_company_knowledge` actually searches.
+- **Pytest suite** (this task): `orchestration/tests/` and `documents/tests/`, 61 tests,
+  99% coverage on the two target packages, using `pytest-django` + `factory_boy` as
+  specified.

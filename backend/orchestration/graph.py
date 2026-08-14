@@ -11,12 +11,23 @@ deterministic mock pipeline -- this graph only owns classification + the Sales
 Worker.
 """
 
+import logging
 from typing import Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
 from orchestration.model_client import LLMFactory
 from orchestration.tool_registry import build_search_company_knowledge_tool
+
+logger = logging.getLogger(__name__)
+
+
+class SalesWorkerError(Exception):
+    """Raised when the Sales Worker (Groq) fails to produce an answer, after
+    the Supervisor has already classified the document as sales_rfp. Distinct
+    from an MCP-server-unavailable condition, which is handled separately and
+    gracefully -- this represents a real, user-visible failure."""
+
 
 ROUTES = Literal[
     "sales_rfp", "invoice_reconciliation", "compliance_audit", "general_intake"
@@ -104,27 +115,28 @@ async def _run_sales_worker_agent(
 
 
 async def sales_worker_node(state: GraphState) -> dict:
-    import logging
+    from contextlib import AsyncExitStack
 
     from mcp_host.client import build_mcp_tools, mcp_session
-
-    logger = logging.getLogger(__name__)
 
     search_tool = build_search_company_knowledge_tool(state["organization_id"])
     document_excerpt = state["document_text"][:MAX_DOCUMENT_CHARS] or "(empty document)"
 
-    try:
-        async with mcp_session() as session:
-            mcp_tools = await build_mcp_tools(session)
-            answer = await _run_sales_worker_agent(
-                document_excerpt, [search_tool, *mcp_tools]
+    tools = [search_tool]
+    async with AsyncExitStack() as stack:
+        try:
+            session = await stack.enter_async_context(mcp_session())
+            tools = [search_tool, *await build_mcp_tools(session)]
+        except Exception:
+            logger.warning(
+                "MCP server unavailable; Sales Worker running without MCP tools",
+                exc_info=True,
             )
-    except Exception:
-        logger.warning(
-            "MCP server unavailable; Sales Worker running without MCP tools",
-            exc_info=True,
-        )
-        answer = await _run_sales_worker_agent(document_excerpt, [search_tool])
+
+        try:
+            answer = await _run_sales_worker_agent(document_excerpt, tools)
+        except Exception as exc:
+            raise SalesWorkerError(str(exc)) from exc
 
     return {"answer": answer}
 

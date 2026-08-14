@@ -14,7 +14,7 @@ from django.utils import timezone
 from agents.models import AgentProfile, AgentRun, Answer, ToolCall
 from documents.models import Document
 from memory.vector_client import extract_text
-from orchestration.graph import graph
+from orchestration.graph import SalesWorkerError, graph
 from orchestration.model_client import LLMConfigurationError
 from orchestration.runner import trigger_mock_agent_run
 
@@ -60,6 +60,16 @@ async def trigger_agent_run(document_id) -> None:
                 "answer": None,
             }
         )
+    except SalesWorkerError as exc:
+        logger.error("Sales Worker failed for document %s: %s", document_id, exc)
+        agent_run.status = AgentRun.Status.FAILED
+        agent_run.error_message = f"Sales Worker failed: {exc}"
+        agent_run.finished_at = timezone.now()
+        await agent_run.asave()
+
+        document.status = Document.Status.FAILED
+        await document.asave()
+        return
     except LLMConfigurationError as exc:
         logger.warning(
             "LLM not configured (%s); falling back to mock for document %s",
