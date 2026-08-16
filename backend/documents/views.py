@@ -2,6 +2,7 @@ import asyncio
 import logging
 import threading
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -35,8 +36,22 @@ def _run_mock_agent_in_background(document_id) -> None:
 
 
 class DocumentViewSet(ModelViewSet):
-    queryset = Document.objects.all()
     serializer_class = DocumentSerializer
+
+    def get_queryset(self):
+        queryset = Document.objects.filter(deleted_at__isnull=True).order_by(
+            "-created_at"
+        )
+        organization_id = self.request.query_params.get("organization")
+        if organization_id:
+            queryset = queryset.filter(organization_id=organization_id)
+        return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        document = self.get_object()
+        document.deleted_at = timezone.now()
+        document.save(update_fields=["deleted_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

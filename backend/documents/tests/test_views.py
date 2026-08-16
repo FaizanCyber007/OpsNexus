@@ -122,6 +122,97 @@ class TestDocumentUploadEndpoint:
 
 
 @pytest.mark.django_db
+class TestDocumentListEndpoint:
+    def test_orders_newest_first(self, api_client):
+        organization = OrganizationFactory()
+        older = DocumentFactory(organization=organization)
+        newer = DocumentFactory(organization=organization)
+
+        response = api_client.get("/api/documents/")
+
+        assert response.status_code == 200
+        ids = [doc["id"] for doc in response.data]
+        assert ids.index(str(newer.id)) < ids.index(str(older.id))
+
+    def test_filters_by_organization_query_param(self, api_client):
+        org_a = OrganizationFactory()
+        org_b = OrganizationFactory()
+        doc_a = DocumentFactory(organization=org_a)
+        DocumentFactory(organization=org_b)
+
+        response = api_client.get(f"/api/documents/?organization={org_a.id}")
+
+        assert response.status_code == 200
+        assert [doc["id"] for doc in response.data] == [str(doc_a.id)]
+
+    def test_excludes_soft_deleted_documents(self, api_client):
+        document = DocumentFactory()
+
+        api_client.delete(f"/api/documents/{document.id}/")
+        response = api_client.get("/api/documents/")
+
+        assert response.status_code == 200
+        assert response.data == []
+
+    def test_no_organization_param_returns_all(self, api_client):
+        DocumentFactory()
+        DocumentFactory()
+
+        response = api_client.get("/api/documents/")
+
+        assert response.status_code == 200
+        assert len(response.data) == 2
+
+
+@pytest.mark.django_db
+class TestDocumentRetrieveEndpoint:
+    def test_returns_the_document(self, api_client):
+        document = DocumentFactory()
+
+        response = api_client.get(f"/api/documents/{document.id}/")
+
+        assert response.status_code == 200
+        assert response.data["id"] == str(document.id)
+
+    def test_soft_deleted_document_returns_404(self, api_client):
+        document = DocumentFactory()
+
+        api_client.delete(f"/api/documents/{document.id}/")
+        response = api_client.get(f"/api/documents/{document.id}/")
+
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestDocumentDestroyEndpoint:
+    def test_soft_deletes_instead_of_removing_the_row(self, api_client):
+        document = DocumentFactory()
+
+        response = api_client.delete(f"/api/documents/{document.id}/")
+
+        assert response.status_code == 204
+        assert Document.objects.filter(id=document.id).exists()
+
+        document.refresh_from_db()
+        assert document.deleted_at is not None
+
+    def test_deleting_nonexistent_document_returns_404(self, api_client):
+        response = api_client.delete(
+            "/api/documents/00000000-0000-0000-0000-000000000000/"
+        )
+
+        assert response.status_code == 404
+
+    def test_deleting_already_deleted_document_returns_404(self, api_client):
+        document = DocumentFactory()
+
+        api_client.delete(f"/api/documents/{document.id}/")
+        response = api_client.delete(f"/api/documents/{document.id}/")
+
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
 class TestDocumentAnswersEndpoint:
     def test_returns_answers_for_the_document(self, api_client):
         document = DocumentFactory()

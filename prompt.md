@@ -524,3 +524,75 @@ this task asked for it logged explicitly:
 - **Pytest suite** (this task): `orchestration/tests/` and `documents/tests/`, 61 tests,
   99% coverage on the two target packages, using `pytest-django` + `factory_boy` as
   specified.
+
+---
+
+## Prompt 12
+
+```
+[SYSTEM CONTEXT]
+You are the Lead Full-Stack Engineer for "OpsNexus".
+- Stack: Next.js 14, Tailwind, Zod, Django 5, DRF.
+- Goal: Fulfill the "Complete CRUD operations" and "Input validation" requirements for Week 6.
+
+[YOUR TASK: COMPLETE CRUD & ZOD VALIDATION]
+1. Backend CRUD Operations (`documents/views.py`):
+   - Ensure the `DocumentViewSet` supports `list`, `retrieve`, and `destroy`.
+   - Update the `list` method to return documents ordered by newest first (`-created_at`). Ensure soft-deletes are respected (if implemented).
+2. Frontend File Validation (Zod):
+   - In the Next.js Dropzone component, implement strict client-side validation using Zod.
+   - Constraints: Accept ONLY `.pdf`, `.csv`, or `.xlsx`. Max file size: 10MB.
+   - Display beautiful, red inline error toasts if the user tries to upload an invalid format or oversized file.
+3. Frontend Historical Dashboard (`app/dashboard/page.tsx`):
+   - Build a "Recent Runs" data table below the dropzone.
+   - Use `apiClient.ts` to `GET /api/v1/documents/` and list historical document runs, showing their `doc_type`, `status`, and upload date.
+   - Add a "Delete" (trash can) button next to each row that sends a `DELETE` request to the backend and dynamically removes the row from the UI.
+
+[EXECUTION CONSTRAINTS]
+Run `npm run lint`, `black .`, and `flake8`.
+Commit: `git add . && git commit -m "feat: implement complete document CRUD UI and strict Zod file validation"`
+```
+
+Two things needed clarifying before touching code, confirmed with you: the task
+referenced `GET /api/v1/documents/`, but the app has always used `/api/documents/`
+(no version prefix) and every existing frontend caller depends on that path -- kept
+it unversioned rather than doing an unrequested, wide routing refactor for a single
+consumer. And `deleted_at` (inherited by every model from `BaseModel` since the very
+first scaffolding session) had never actually been wired up anywhere -- confirmed
+implementing real soft-delete rather than a literal hard `DELETE`, since that's
+clearly what the field was scaffolded for and means a delete click doesn't destroy
+the file/answer trail.
+
+`documents/views.py`'s `DocumentViewSet` gained a `get_queryset()` (excludes
+soft-deleted rows, orders `-created_at`, optionally filters by `?organization=<uuid>`
+-- necessary so the new frontend table doesn't leak another tenant's documents,
+a real isolation concern given this app's multi-tenant `BaseModel` design) and a
+`destroy()` override that sets `deleted_at` instead of removing the row. `list`,
+`retrieve`, and the existing `answers` action all now route through the same
+soft-delete-aware queryset.
+
+Added `zod` as a direct dependency (previously only present transitively via
+`eslint-config-next`) and `lib/fileValidation.ts`: an extension-based schema (not
+MIME-type, which browsers report inconsistently for `.csv`/`.xlsx`) plus a 10MB size
+check. `Dropzone.tsx` runs this before ever building the `FormData` -- an invalid
+file gets the existing inline red error treatment *and* a toast via the toast system
+built two sessions ago, with zero network request made.
+
+New `RecentRunsTable.tsx` mounted in `DashboardContent.tsx` below the upload card:
+fetches `GET /documents/?organization=<id>`, refetching whenever the org changes or a
+`refreshKey` counter (bumped on every successful upload) changes, so a fresh upload
+appears without a manual reload. Each row has a trash-can button
+(`apiClient.delete()`, new method added to `apiClient.ts`) that removes the row from
+local state immediately on success -- no refetch -- matching the task's literal
+"dynamically removes the row" ask.
+
+Extended `documents/tests/test_views.py` with new `TestDocumentListEndpoint`,
+`TestDocumentRetrieveEndpoint`, and `TestDocumentDestroyEndpoint` classes covering
+ordering, organization filtering, soft-delete exclusion from list/retrieve, and that
+the row survives with `deleted_at` set rather than actually being removed. Full
+suite: 70 tests, 99% coverage on `orchestration`+`documents`. Verified live via curl
+against the real Postgres-backed server: two documents under one org list
+newest-first, a second org's document never leaks into the first org's filtered
+list, and deleting one confirms all three soft-delete properties end-to-end (gone
+from list, 404s on direct retrieve, row still present in the database with
+`deleted_at` populated).

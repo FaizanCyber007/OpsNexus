@@ -6,6 +6,11 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/contexts/ToastContext";
 import { apiClient, ApiError } from "@/lib/apiClient";
+import {
+  ACCEPTED_EXTENSIONS,
+  MAX_FILE_SIZE_LABEL,
+  validateUploadFile,
+} from "@/lib/fileValidation";
 import type { Document, DocumentUploadResponse } from "@/lib/types";
 
 interface DropzoneProps {
@@ -29,6 +34,17 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
 
   async function uploadFile(file: File) {
     const id = `${file.name}-${Date.now()}`;
+
+    const validationError = validateUploadFile(file);
+    if (validationError) {
+      setUploads((prev) => [
+        ...prev,
+        { id, name: file.name, status: "error", message: validationError },
+      ]);
+      showError(`"${file.name}" — ${validationError}`);
+      return;
+    }
+
     setUploads((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
 
     try {
@@ -106,13 +122,14 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
           <p className="mt-1 text-xs text-white/40">
             {disabled
               ? "Enter an Organization ID above to enable uploads"
-              : "Any file type — routed automatically by name and extension"}
+              : `${ACCEPTED_EXTENSIONS.join(", ")} — up to ${MAX_FILE_SIZE_LABEL} each`}
           </p>
         </div>
         <input
           ref={inputRef}
           type="file"
           multiple
+          accept={ACCEPTED_EXTENSIONS.join(",")}
           disabled={disabled}
           className="hidden"
           onChange={(event) => handleFiles(event.target.files)}

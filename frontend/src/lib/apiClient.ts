@@ -52,4 +52,5 @@ export const apiClient = {
             ? JSON.stringify(data)
             : undefined,
     }),
+  delete: <T = void>(path: string) => request<T>(path, { method: "DELETE" }),
 };

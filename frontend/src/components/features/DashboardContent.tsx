@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { AnswerDisplay } from "@/components/features/AnswerDisplay";
 import { Dropzone } from "@/components/features/Dropzone";
+import { RecentRunsTable } from "@/components/features/RecentRunsTable";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import type { Document } from "@/lib/types";
@@ -17,6 +18,7 @@ export function DashboardContent() {
   const [organizationId, setOrganizationId] = useState("");
   const [uploads, setUploads] = useState<UploadedDoc[]>([]);
   const [statuses, setStatuses] = useState<Record<string, Document["status"]>>({});
+  const [runsVersion, setRunsVersion] = useState(0);
 
   const stats = useMemo(() => {
     const values = Object.values(statuses);
@@ -54,11 +56,14 @@ export function DashboardContent() {
         </label>
         <Dropzone
           organizationId={organizationId}
-          onUploaded={(response, fileName) =>
-            setUploads((prev) => [...prev, { id: response.document_id, fileName }])
-          }
+          onUploaded={(response, fileName) => {
+            setUploads((prev) => [...prev, { id: response.document_id, fileName }]);
+            setRunsVersion((prev) => prev + 1);
+          }}
         />
       </Card>
+
+      <RecentRunsTable organizationId={organizationId} refreshKey={runsVersion} />
 
       {uploads.length > 0 && (
         <div className="flex flex-col gap-3">
