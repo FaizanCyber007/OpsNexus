@@ -87,6 +87,9 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
   return (
     <div className="flex flex-col gap-4">
       <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
         onDragOver={(event) => {
           event.preventDefault();
           if (!disabled) setIsDragging(true);
@@ -94,6 +97,13 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => !disabled && inputRef.current?.click()}
+        onKeyDown={(event) => {
+          if (disabled) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
           disabled
             ? "cursor-not-allowed border-white/10 bg-white/[0.02] opacity-60"
@@ -132,7 +142,10 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
           accept={ACCEPTED_EXTENSIONS.join(",")}
           disabled={disabled}
           className="hidden"
-          onChange={(event) => handleFiles(event.target.files)}
+          onChange={(event) => {
+            handleFiles(event.target.files);
+            event.currentTarget.value = "";
+          }}
         />
       </div>
 

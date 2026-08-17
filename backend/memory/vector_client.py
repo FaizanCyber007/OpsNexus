@@ -15,6 +15,7 @@ document is actually ingested.
 
 import logging
 import os
+import threading
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -25,15 +26,23 @@ logger = logging.getLogger(__name__)
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
 _embeddings: "HuggingFaceEmbeddings | None" = None
+_embeddings_lock = threading.Lock()
 
 
 def _get_embeddings() -> "HuggingFaceEmbeddings":
-    """Lazily construct the shared embedding model (loading it is expensive)."""
+    """Lazily construct the shared embedding model (loading it is expensive).
+
+    Each document upload runs on its own background thread, so this can be
+    called concurrently; double-checked locking ensures only one thread ever
+    constructs the model and every caller shares that one cached instance.
+    """
     global _embeddings
     if _embeddings is None:
-        from langchain_huggingface import HuggingFaceEmbeddings
+        with _embeddings_lock:
+            if _embeddings is None:
+                from langchain_huggingface import HuggingFaceEmbeddings
 
-        _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+                _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
     return _embeddings
 
 
@@ -67,6 +76,17 @@ class ChromaDBClient:
             metadatas=[doc.get("metadata", {}) for doc in documents],
             ids=[doc["id"] for doc in documents],
         )
+
+    def delete_by_document_id(self, document_id: str) -> None:
+        """Remove every chunk previously ingested for one source document.
+
+        Re-ingesting a document (e.g. after a manual retry) reuses the same
+        deterministic chunk ids for however many chunks the new extraction
+        produces; if the new run produces fewer chunks than the old one, the
+        extra old ones would otherwise linger in the collection forever.
+        """
+        store = self.initialize_collection()
+        store.delete(where={"document_id": document_id})
 
     def semantic_search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """Return the top_k most semantically similar chunks to `query`."""
@@ -144,6 +164,7 @@ def ingest_document(document: Any) -> None:
         return
 
     client = ChromaDBClient(collection_name=f"org_{document.organization_id}")
+    client.delete_by_document_id(str(document.id))
     client.add_documents(
         [
             {

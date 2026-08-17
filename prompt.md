@@ -194,9 +194,12 @@ coming agentic integration work:
   `components/features` (business logic: `Dropzone`, `DocumentUploadCard`,
   `AnswerDisplay`), `lib` (typed `apiClient` + `types.ts` mirroring the Django models),
   and `hooks` (`useDocumentPolling`). `page.tsx` files stay thin compositions; all
-  TypeScript types for API payloads are hand-mirrored from the DRF serializers so a
-  backend field rename is a visible type error on the frontend, not a silent runtime
-  bug.
+  TypeScript types for API payloads are hand-mirrored from the DRF serializers,
+  documenting the expected API contract in one place per model. This does *not*
+  catch a backend field rename at compile time on its own — TypeScript has no
+  visibility into `serializers.py` — it only helps if the interface is updated by
+  hand alongside the rename; a real compile-time guarantee would need schema
+  generation or contract tests, neither of which exist yet.
 - **Why this matters for what's next:** the mock `DeterministicRouter` /
   `trigger_mock_agent_run` stub in `orchestration` is intentionally isolated behind a
   single async function boundary — swapping it for a real LangGraph-orchestrated

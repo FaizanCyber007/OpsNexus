@@ -14,6 +14,7 @@ export function Meter({ label, value }: MeterProps) {
       </div>
       <div
         role="meter"
+        aria-label={label}
         aria-valuenow={percent}
         aria-valuemin={0}
         aria-valuemax={100}

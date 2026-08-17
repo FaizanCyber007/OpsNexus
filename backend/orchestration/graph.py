@@ -16,7 +16,7 @@ from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
-from orchestration.model_client import LLMFactory
+from orchestration.model_client import LLMConfigurationError, LLMFactory
 from orchestration.tool_registry import build_search_company_knowledge_tool
 
 logger = logging.getLogger(__name__)
@@ -155,16 +155,17 @@ async def sales_worker_node(state: GraphState) -> dict:
 
     tools = [search_tool]
     worker_error: Exception | None = None
+    llm_config_error: LLMConfigurationError | None = None
     answer = None
     worker_tool_calls: list[dict[str, Any]] = []
 
-    # The raise (if any) happens *after* this block exits, not from inside
-    # it: an exception raised while the MCP session's underlying anyio task
+    # Any raise below happens *after* this block exits, not from inside it:
+    # an exception raised while the MCP session's underlying anyio task
     # group is still open gets wrapped in a BaseExceptionGroup by the time it
-    # reaches the caller, so a bare `except SalesWorkerError` in
-    # agent_runner.py would never match it. Closing the stack first (async
-    # with body only sets `worker_error`) guarantees a plain SalesWorkerError
-    # propagates.
+    # reaches the caller, so a bare `except SalesWorkerError`/
+    # `except LLMConfigurationError` in agent_runner.py would never match it.
+    # Closing the stack first (the async with body only records which
+    # exception happened) guarantees a plain, matchable exception propagates.
     async with AsyncExitStack() as stack:
         try:
             session = await stack.enter_async_context(mcp_session())
@@ -179,9 +180,16 @@ async def sales_worker_node(state: GraphState) -> dict:
             answer, worker_tool_calls = await _run_sales_worker_agent(
                 document_excerpt, tools
             )
+        except LLMConfigurationError as exc:
+            # Missing GROQ_API_KEY is a configuration problem, not a Worker
+            # failure -- agent_runner.py has its own dedicated fallback path
+            # for this exact exception type, so it must reach it unwrapped.
+            llm_config_error = exc
         except Exception as exc:
             worker_error = exc
 
+    if llm_config_error is not None:
+        raise llm_config_error
     if worker_error is not None:
         raise SalesWorkerError(str(worker_error)) from worker_error
 

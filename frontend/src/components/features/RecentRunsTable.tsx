@@ -10,6 +10,7 @@ import type { Document, DocumentType } from "@/lib/types";
 interface RecentRunsTableProps {
   organizationId: string;
   refreshKey: number;
+  onDeleted?: (documentId: string) => void;
 }
 
 const DOC_TYPE_LABELS: Record<DocumentType, string> = {
@@ -31,7 +32,11 @@ function formatDate(iso: string): string {
   });
 }
 
-export function RecentRunsTable({ organizationId, refreshKey }: RecentRunsTableProps) {
+export function RecentRunsTable({
+  organizationId,
+  refreshKey,
+  onDeleted,
+}: RecentRunsTableProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { showError } = useToast();
@@ -42,6 +47,10 @@ export function RecentRunsTable({ organizationId, refreshKey }: RecentRunsTableP
     let cancelled = false;
 
     async function loadDocuments() {
+      // Clear stale rows from a previous organization/refresh immediately,
+      // so their (now-irrelevant) delete buttons aren't clickable while the
+      // new data is still loading.
+      setDocuments([]);
       setIsLoading(true);
       try {
         const result = await apiClient.get<Document[]>(
@@ -66,6 +75,7 @@ export function RecentRunsTable({ organizationId, refreshKey }: RecentRunsTableP
     try {
       await apiClient.delete(`/documents/${document.id}/`);
       setDocuments((prev) => prev.filter((doc) => doc.id !== document.id));
+      onDeleted?.(document.id);
     } catch (error) {
       const message =
         error instanceof ApiError ? `delete failed (${error.status})` : "delete failed";

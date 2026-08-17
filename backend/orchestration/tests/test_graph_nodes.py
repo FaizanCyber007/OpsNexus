@@ -14,6 +14,7 @@ from orchestration.graph import (
     sales_worker_node,
     supervisor_node,
 )
+from orchestration.model_client import LLMConfigurationError
 
 
 def test_route_after_supervisor_sends_sales_rfp_to_worker():
@@ -224,3 +225,27 @@ class TestSalesWorkerNode:
             )
 
         assert result == {"answer": fake_answer, "worker_tool_calls": fake_tool_calls}
+
+    def test_llm_configuration_error_is_not_wrapped(self):
+        """A missing GROQ_API_KEY must reach agent_runner.py's dedicated
+        LLMConfigurationError -> mock-fallback branch unwrapped, not get
+        caught by the generic Worker-failure handler and turned into a
+        SalesWorkerError (which has no mock fallback)."""
+        with (
+            patch("mcp_host.client.mcp_session", self._fake_mcp_session),
+            patch("mcp_host.client.build_mcp_tools", AsyncMock(return_value=[])),
+            patch(
+                "orchestration.graph._run_sales_worker_agent",
+                AsyncMock(side_effect=LLMConfigurationError("GROQ_API_KEY is not set")),
+            ),
+            patch(
+                "orchestration.graph.build_search_company_knowledge_tool",
+                return_value="search_tool",
+            ),
+        ):
+            with pytest.raises(LLMConfigurationError, match="GROQ_API_KEY"):
+                asyncio.run(
+                    sales_worker_node(
+                        {"organization_id": "org-1", "document_text": "hi"}
+                    )
+                )

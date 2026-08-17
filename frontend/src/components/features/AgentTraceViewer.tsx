@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/apiClient";
 import type { ToolCall } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 1500;
+const MAX_POLL_BACKOFF_MS = 15000;
 
 const STEP_LABELS: Record<string, string> = {
   langgraph_supervisor_classify: "Supervisor classified the document",
@@ -99,6 +100,7 @@ export function AgentTraceViewer({ agentRunId, isTerminal }: AgentTraceViewerPro
 
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout>;
+    let consecutiveFailures = 0;
 
     async function poll() {
       try {
@@ -107,12 +109,21 @@ export function AgentTraceViewer({ agentRunId, isTerminal }: AgentTraceViewerPro
         );
         if (cancelled) return;
         setSteps(result);
+        consecutiveFailures = 0;
       } catch {
-        if (!cancelled) showError("Couldn't load the agent's trace log.");
+        if (cancelled) return;
+        if (consecutiveFailures === 0) {
+          showError("Couldn't load the agent's trace log.");
+        }
+        consecutiveFailures += 1;
       }
 
       if (!cancelled && !isTerminal) {
-        timeoutId = setTimeout(poll, POLL_INTERVAL_MS);
+        const delay =
+          consecutiveFailures > 0
+            ? Math.min(POLL_INTERVAL_MS * 2 ** consecutiveFailures, MAX_POLL_BACKOFF_MS)
+            : POLL_INTERVAL_MS;
+        timeoutId = setTimeout(poll, delay);
       }
     }
 

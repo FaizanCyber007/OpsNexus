@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -54,3 +55,9 @@ class TestRunMockAgentInBackground:
 
         document.refresh_from_db()
         assert document.status == Document.Status.FAILED
+
+    def test_document_not_found_is_logged_and_does_not_raise(self):
+        fake_id = uuid.uuid4()
+
+        # Should not raise -- the lookup failure must be caught and logged.
+        _run_mock_agent_in_background(fake_id)

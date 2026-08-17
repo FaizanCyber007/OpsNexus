@@ -25,7 +25,10 @@ class TestDocumentUploadEndpoint:
             content_type="text/plain",
         )
 
-        with patch("documents.views.threading.Thread") as MockThread:
+        with (
+            patch("documents.views.threading.Thread") as MockThread,
+            patch("django.db.transaction.on_commit", side_effect=lambda func: func()),
+        ):
             response = api_client.post(
                 "/api/documents/",
                 {
@@ -104,7 +107,10 @@ class TestDocumentUploadEndpoint:
         organization = OrganizationFactory()
         upload = SimpleUploadedFile("f.txt", b"content", content_type="text/plain")
 
-        with patch("documents.views.threading.Thread") as MockThread:
+        with (
+            patch("documents.views.threading.Thread") as MockThread,
+            patch("django.db.transaction.on_commit", side_effect=lambda func: func()),
+        ):
             response = api_client.post(
                 "/api/documents/",
                 {
@@ -233,3 +239,16 @@ class TestDocumentAnswersEndpoint:
 
         assert response.status_code == 200
         assert response.data == []
+
+    def test_soft_deleted_document_returns_404(self, api_client):
+        document = DocumentFactory()
+
+        api_client.delete(f"/api/documents/{document.id}/")
+        response = api_client.get(f"/api/documents/{document.id}/answers/")
+
+        assert response.status_code == 404
+
+    def test_malformed_document_id_returns_404(self, api_client):
+        response = api_client.get("/api/documents/not-a-valid-uuid/answers/")
+
+        assert response.status_code == 404

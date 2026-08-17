@@ -15,7 +15,11 @@ from agents.models import AgentProfile, AgentRun, Answer, ToolCall
 from documents.models import Document
 from memory.vector_client import extract_text
 from orchestration.graph import SalesWorkerError, graph
-from orchestration.model_client import LLMConfigurationError
+from orchestration.model_client import (
+    SUPERVISOR_MODEL_NAME,
+    WORKER_MODEL_NAME,
+    LLMConfigurationError,
+)
 from orchestration.runner import trigger_mock_agent_run
 
 logger = logging.getLogger(__name__)
@@ -26,7 +30,7 @@ AGENT_PROFILE_DEFAULTS = {
         "Gemini Supervisor classifies the document; for sales_rfp, a Groq "
         "Worker drafts a response using the search_company_knowledge tool."
     ),
-    "model_name": "gemini-1.5-flash+llama3-70b-8192",
+    "model_name": f"{SUPERVISOR_MODEL_NAME}+{WORKER_MODEL_NAME}",
     "temperature": 0.0,
 }
 
