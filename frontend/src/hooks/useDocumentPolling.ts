@@ -32,6 +32,7 @@ export function useDocumentPolling(
 
     async function poll() {
       try {
+        setIsPolling(true);
         const result = await apiClient.get<Document>(`/documents/${documentId}/`);
         if (cancelled) return;
 
