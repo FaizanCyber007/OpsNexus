@@ -12,7 +12,7 @@ Worker.
 """
 
 import logging
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -74,6 +74,7 @@ class GraphState(TypedDict):
     route: str
     reasoning: str
     answer: StructuredAnswer | None
+    worker_tool_calls: list[dict[str, Any]]
 
 
 async def supervisor_node(state: GraphState) -> dict:
@@ -89,9 +90,39 @@ async def supervisor_node(state: GraphState) -> dict:
     return {"route": result.route, "reasoning": result.reasoning}
 
 
+def _extract_tool_calls(messages: list) -> list[dict[str, Any]]:
+    """Extract each real tool invocation from a ReAct agent's message history.
+
+    LangGraph's `create_react_agent` never persists its intermediate tool
+    calls anywhere -- they only exist in this in-memory message list. Walk
+    it, pairing each `AIMessage.tool_calls` entry with the `ToolMessage` that
+    answers it (matched by `tool_call_id`), so the caller can persist a real
+    `ToolCall` row per step instead of losing this trail once the node
+    returns.
+    """
+    from langchain_core.messages import ToolMessage
+
+    pending_by_id: dict[str, dict[str, Any]] = {}
+    extracted: list[dict[str, Any]] = []
+
+    for message in messages:
+        for call in getattr(message, "tool_calls", None) or []:
+            pending_by_id[call["id"]] = {
+                "tool_name": call["name"],
+                "input": call["args"],
+            }
+
+        if isinstance(message, ToolMessage):
+            pending = pending_by_id.get(message.tool_call_id)
+            if pending is not None:
+                extracted.append({**pending, "output": message.content})
+
+    return extracted
+
+
 async def _run_sales_worker_agent(
     document_excerpt: str, tools: list
-) -> StructuredAnswer:
+) -> tuple[StructuredAnswer, list[dict[str, Any]]]:
     from langgraph.prebuilt import create_react_agent
 
     agent = create_react_agent(
@@ -111,7 +142,7 @@ async def _run_sales_worker_agent(
             ]
         }
     )
-    return result["structured_response"]
+    return result["structured_response"], _extract_tool_calls(result["messages"])
 
 
 async def sales_worker_node(state: GraphState) -> dict:
@@ -123,6 +154,17 @@ async def sales_worker_node(state: GraphState) -> dict:
     document_excerpt = state["document_text"][:MAX_DOCUMENT_CHARS] or "(empty document)"
 
     tools = [search_tool]
+    worker_error: Exception | None = None
+    answer = None
+    worker_tool_calls: list[dict[str, Any]] = []
+
+    # The raise (if any) happens *after* this block exits, not from inside
+    # it: an exception raised while the MCP session's underlying anyio task
+    # group is still open gets wrapped in a BaseExceptionGroup by the time it
+    # reaches the caller, so a bare `except SalesWorkerError` in
+    # agent_runner.py would never match it. Closing the stack first (async
+    # with body only sets `worker_error`) guarantees a plain SalesWorkerError
+    # propagates.
     async with AsyncExitStack() as stack:
         try:
             session = await stack.enter_async_context(mcp_session())
@@ -134,11 +176,16 @@ async def sales_worker_node(state: GraphState) -> dict:
             )
 
         try:
-            answer = await _run_sales_worker_agent(document_excerpt, tools)
+            answer, worker_tool_calls = await _run_sales_worker_agent(
+                document_excerpt, tools
+            )
         except Exception as exc:
-            raise SalesWorkerError(str(exc)) from exc
+            worker_error = exc
 
-    return {"answer": answer}
+    if worker_error is not None:
+        raise SalesWorkerError(str(worker_error)) from worker_error
+
+    return {"answer": answer, "worker_tool_calls": worker_tool_calls}
 
 
 def _route_after_supervisor(state: GraphState) -> str:

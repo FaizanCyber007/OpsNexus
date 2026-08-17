@@ -58,6 +58,7 @@ async def trigger_agent_run(document_id) -> None:
                 "route": "",
                 "reasoning": "",
                 "answer": None,
+                "worker_tool_calls": [],
             }
         )
     except SalesWorkerError as exc:
@@ -100,6 +101,14 @@ async def trigger_agent_run(document_id) -> None:
     )
 
     if route == "sales_rfp" and result.get("answer") is not None:
+        for call in result.get("worker_tool_calls", []):
+            await ToolCall.objects.acreate(
+                agent_run=agent_run,
+                tool_name=call["tool_name"],
+                input_data=call["input"],
+                output_data={"result": call["output"]},
+            )
+
         answer = result["answer"]
         await Answer.objects.acreate(
             agent_run=agent_run,

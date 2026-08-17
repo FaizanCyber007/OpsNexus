@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { AgentTraceViewer } from "@/components/features/AgentTraceViewer";
 import { Meter } from "@/components/ui/Meter";
 import { Shimmer } from "@/components/ui/Shimmer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -50,6 +51,13 @@ export function AnswerDisplay({ documentId, fileName, onStatusChange }: AnswerDi
           Processing failed for this document.
         </p>
       )}
+
+      <div className="mb-4">
+        <AgentTraceViewer
+          agentRunId={document?.latest_agent_run_id ?? null}
+          isTerminal={document?.status === "completed" || document?.status === "failed"}
+        />
+      </div>
 
       {(isPolling || document?.status === "pending" || document?.status === "processing") && (
         <div className="flex flex-col gap-2">

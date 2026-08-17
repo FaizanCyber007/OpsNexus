@@ -21,10 +21,12 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from agents.views import AgentRunViewSet
 from documents.views import DocumentViewSet
 
 router = DefaultRouter()
 router.register(r"documents", DocumentViewSet, basename="document")
+router.register(r"agent-runs", AgentRunViewSet, basename="agent-run")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

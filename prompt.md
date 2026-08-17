@@ -596,3 +596,97 @@ newest-first, a second org's document never leaks into the first org's filtered
 list, and deleting one confirms all three soft-delete properties end-to-end (gone
 from list, 404s on direct retrieve, row still present in the database with
 `deleted_at` populated).
+
+---
+
+## Prompt 13
+
+```
+[SYSTEM CONTEXT]
+You are the UX/UI Architect for "OpsNexus".
+- Stack: Next.js 14, Django 5, DRF.
+- Goal: We are preparing for a Live Mentor Demo. The mentor needs to physically see the AI's "Chain of Thought" and tool executions on the screen.
+
+[YOUR TASK: VISUALIZING THE AGENT TRACING LAYER]
+1. Backend Tracing Exposure (`agents/views.py`):
+   - Create an endpoint `GET /api/v1/agent-runs/{id}/tool-calls/`.
+   - This endpoint must return all `ToolCall` database records associated with an `AgentRun`, ordered chronologically. This includes the `tool_name`, `tool_input` (JSON), and `tool_output` (JSON).
+2. Frontend Trace Component (`src/components/features/AgentTraceViewer.tsx`):
+   - Build a sleek, expandable "Agent Thought Process" accordion or sidebar component.
+   - When a document is processing (or completed), fetch and render the `ToolCall` logs.
+   - Use premium UI styling: e.g., a timeline view showing `[Supervisor routed to Sales Worker] -> [Sales Worker executed ChromaDB search] -> [Sales Worker called MCP Server]`.
+3. Final Polish:
+   - Integrate this component into the `Customer 360` or `Dashboard` detail view.
+   - Review `prompts.md`. Append a log stating we implemented Full CRUD operations, Zod input validation, and an Agent Trace UI to finalize Week 6.
+
+[EXECUTION CONSTRAINTS]
+Run `npm run lint`. Fix any TypeScript type mismatches for the new JSON logs.
+Commit: `git add . && git commit -m "feat: expose tool-call tracing logs to frontend for live agent visualization"`
+```
+
+Auditing the actual data before writing any UI surfaced the real blocker: only **one**
+`ToolCall` row was ever persisted per run -- the Supervisor's classification decision.
+The Sales Worker's real tool calls (`search_company_knowledge`, the MCP pricing
+lookup) happened inside LangGraph's `create_react_agent` ReAct loop and were never
+written to the database, only existing transiently in that node's message history.
+A trace UI on top of that data would have shown one static step forever, not a real
+chain of thought. Confirmed with you: extended `orchestration/graph.py` with a new
+`_extract_tool_calls()` that walks the ReAct agent's message history, pairing each
+`AIMessage.tool_calls` entry with its answering `ToolMessage` by id, and
+`agent_runner.py` now persists each one as its own `ToolCall` row (sequential
+`await acreate()` calls, not `asyncio.gather`, so timestamps stay monotonically
+ordered) alongside the existing supervisor-classification row.
+
+Also confirmed: added `latest_agent_run_id` to `DocumentSerializer` (most recently
+created `AgentRun` for that document) so the frontend can discover which run to
+trace while a document is still "processing" -- reusing the polling
+`useDocumentPolling` already does, rather than a second polling loop.
+
+`agents/serializers.py` gained `ToolCallSerializer` (`tool_input`/`tool_output` are
+`JSONField(source=...)` aliases onto the model's actual `input_data`/`output_data`
+fields, matching the task's literal API contract without a migration).
+`agents/views.py` gained a bare `AgentRunViewSet(GenericViewSet)` with only the
+`tool-calls` detail action registered -- no list/retrieve mixins, so the router
+exposes exactly the one endpoint asked for and nothing more.
+
+Building this surfaced a second real bug, this one in error handling: `sales_worker_node`
+raised `SalesWorkerError` from *inside* the still-open MCP session's `AsyncExitStack`,
+and anyio's task-group cleanup wrapped it in a `BaseExceptionGroup` by the time it
+reached `agent_runner.py` -- so a bare `except SalesWorkerError` never matched it,
+silently falling through to the generic handler and firing the mock fallback instead
+of marking the `Document` `failed` as designed two sessions ago. Fixed by only raising
+after the `AsyncExitStack` block has fully closed. Verified against a real (non-mocked)
+MCP session that the fix produces a plain, catchable `SalesWorkerError`.
+
+Also discovered live: `llama-3.3-70b-versatile` (the Worker model picked two sessions
+ago) has since been fully retired from Groq's catalog -- their lineup shifted entirely
+away from Llama models. Swapped to `openai/gpt-oss-120b`, their current large
+tool-calling-capable open-weight model, reconfirmed against the live model list before
+committing to it (same pattern as the two prior model-retirement fixes this project has
+hit).
+
+`AgentTraceViewer.tsx` (new) polls the tool-calls endpoint every 1.5s while a document
+is processing, renders a collapsible "Agent Thought Process" panel as a vertical
+timeline with a `tool_name` -> friendly-label map, each step expandable to its raw
+JSON input/output, a pulsing "Agent is thinking..." state before the first step lands.
+Mounted in `AnswerDisplay.tsx` -- this app's existing per-document detail card, since
+no separate "Customer 360" view exists in this codebase, per the task's own Dashboard
+fallback.
+
+Verified fully live against the real Postgres/Gemini/Groq/ChromaDB/MCP stack (not
+mocks): confirmed `latest_agent_run_id` populates on the Document response while
+status is still "pending"; confirmed the tool-calls endpoint returns steps
+chronologically as they land; confirmed a genuine (intermittent) Groq tool-choice
+failure correctly marks the Document `failed` with a clean error instead of silently
+falling back, proving the bug fix above; and confirmed a full successful run produces
+exactly the timeline shape the task described -- Supervisor classification, followed
+by real `search_company_knowledge` and `get_internal_pricing_policy` tool calls, all
+in order with correctly aliased `tool_input`/`tool_output` fields.
+
+### Week 6 finalized
+
+Per this task's own instruction: Week 6 closes out having implemented full document
+CRUD (list/retrieve/soft-delete, ordered and organization-scoped), strict Zod
+input validation on the frontend uploader (file type/size, red inline errors +
+toasts), and this Agent Trace UI making the LangGraph Supervisor/Worker pipeline's
+real tool executions visible live on screen for the mentor demo.

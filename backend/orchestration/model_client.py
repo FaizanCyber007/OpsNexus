@@ -16,11 +16,12 @@ class LLMConfigurationError(RuntimeError):
     """Raised when a required LLM provider API key is not configured."""
 
 
-# gemini-1.5-flash / llama3-70b-8192 have been retired by their providers;
-# these are the current equivalents in the same tier (fast supervisor /
-# 70B-class worker), confirmed against each provider's live model list.
+# gemini-1.5-flash / llama3-70b-8192 / llama-3.3-70b-versatile have each been
+# retired by their providers in turn; these are the current equivalents in
+# the same tier (fast supervisor / large tool-calling-capable worker),
+# reconfirmed against each provider's live model list each time.
 SUPERVISOR_MODEL_NAME = "gemini-2.5-flash"
-WORKER_MODEL_NAME = "llama-3.3-70b-versatile"
+WORKER_MODEL_NAME = "openai/gpt-oss-120b"
 
 
 class LLMFactory:

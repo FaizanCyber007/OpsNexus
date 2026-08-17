@@ -17,6 +17,7 @@ export interface Document {
   doc_type: DocumentType;
   status: DocumentStatus;
   file_path: string;
+  latest_agent_run_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -38,9 +39,7 @@ export interface ToolCall {
   id: string;
   agent_run: string;
   tool_name: string;
-  input_data: Record<string, unknown>;
-  output_data: Record<string, unknown>;
+  tool_input: unknown;
+  tool_output: unknown;
   created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
 }

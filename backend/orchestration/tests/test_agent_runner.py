@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from agents.models import AgentRun, Answer
+from agents.models import AgentRun, Answer, ToolCall
 from documents.factories import DocumentFactory
 from documents.models import Document
 from orchestration.agent_runner import trigger_agent_run
@@ -90,6 +90,7 @@ class TestTriggerAgentRun:
                         "route": "sales_rfp",
                         "reasoning": "It's an RFP.",
                         "answer": answer,
+                        "worker_tool_calls": [],
                     }
                 ),
             ),
@@ -111,6 +112,54 @@ class TestTriggerAgentRun:
         saved_answer = Answer.objects.get(agent_run=run)
         assert saved_answer.content == "Here is our RFP response."
         assert saved_answer.confidence_score == 0.9
+
+    def test_worker_tool_calls_are_persisted_in_order(self):
+        document = DocumentFactory()
+        answer = StructuredAnswer(content="answer", confidence_score=0.8)
+        worker_tool_calls = [
+            {
+                "tool_name": "search_company_knowledge",
+                "input": {"query": "pricing"},
+                "output": "No relevant prior context found.",
+            },
+            {
+                "tool_name": "get_internal_pricing_policy",
+                "input": {},
+                "output": '{"tiers": []}',
+            },
+        ]
+
+        with (
+            patch(
+                "orchestration.agent_runner.graph.ainvoke",
+                AsyncMock(
+                    return_value={
+                        "route": "sales_rfp",
+                        "reasoning": "It's an RFP.",
+                        "answer": answer,
+                        "worker_tool_calls": worker_tool_calls,
+                    }
+                ),
+            ),
+            patch(
+                "orchestration.agent_runner.trigger_mock_agent_run",
+                AsyncMock(),
+            ),
+        ):
+            asyncio.run(trigger_agent_run(document.id))
+
+        run = AgentRun.objects.get(document=document)
+        calls = list(ToolCall.objects.filter(agent_run=run).order_by("created_at"))
+
+        # The supervisor classification call, then each worker tool call in order.
+        assert [c.tool_name for c in calls] == [
+            "langgraph_supervisor_classify",
+            "search_company_knowledge",
+            "get_internal_pricing_policy",
+        ]
+        assert calls[1].input_data == {"query": "pricing"}
+        assert calls[1].output_data == {"result": "No relevant prior context found."}
+        assert calls[2].output_data == {"result": '{"tiers": []}'}
 
     def test_non_sales_rfp_route_falls_back_to_mock_without_creating_answer(self):
         document = DocumentFactory()
