@@ -3,6 +3,8 @@ djangorestframework==3.17.1
 psycopg[binary]==3.3.4
 django-environ==0.14.0
 django-cors-headers==4.9.0
+django-storages==1.14.6
+boto3==1.43.72
 mcp==2.0.0
 langchain-community==0.4.1
 langchain-text-splitters==1.1.2

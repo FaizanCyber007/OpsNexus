@@ -6,15 +6,26 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from orchestration.graph import (
-    ClassificationResult,
     SalesWorkerError,
-    StructuredAnswer,
     _extract_tool_calls,
     _route_after_supervisor,
     sales_worker_node,
     supervisor_node,
 )
 from orchestration.model_client import LLMConfigurationError
+from orchestration.schemas import ClassificationResult, StructuredAnswer
+
+
+def _make_structured_answer(**overrides):
+    defaults = dict(
+        content="answer",
+        executive_summary="summary",
+        risk_flags=["Missing SOC2 Policy"],
+        action_items=["Email CFO"],
+        confidence_score=0.8,
+    )
+    defaults.update(overrides)
+    return StructuredAnswer(**defaults)
 
 
 def test_route_after_supervisor_sends_sales_rfp_to_worker():
@@ -150,7 +161,7 @@ class TestSalesWorkerNode:
             raise ConnectionError("mcp unreachable")
             yield  # pragma: no cover
 
-        fake_answer = StructuredAnswer(
+        fake_answer = _make_structured_answer(
             content="answer without mcp", confidence_score=0.4
         )
 
@@ -174,7 +185,9 @@ class TestSalesWorkerNode:
         assert mock_run.call_args.args[1] == ["search_tool"]
 
     def test_uses_mcp_tools_when_available(self):
-        fake_answer = StructuredAnswer(content="answer with mcp", confidence_score=0.9)
+        fake_answer = _make_structured_answer(
+            content="answer with mcp", confidence_score=0.9
+        )
 
         with (
             patch("mcp_host.client.mcp_session", self._fake_mcp_session),
@@ -199,7 +212,7 @@ class TestSalesWorkerNode:
         assert mock_run.call_args.args[1] == ["search_tool", "pricing_tool"]
 
     def test_propagates_extracted_worker_tool_calls(self):
-        fake_answer = StructuredAnswer(content="answer", confidence_score=0.7)
+        fake_answer = _make_structured_answer(content="answer", confidence_score=0.7)
         fake_tool_calls = [
             {
                 "tool_name": "search_company_knowledge",

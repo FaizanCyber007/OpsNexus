@@ -46,6 +46,16 @@ def _get_embeddings() -> "HuggingFaceEmbeddings":
     return _embeddings
 
 
+def get_organization_collection_name(organization_id: Any) -> str:
+    """The ChromaDB collection name for one organization's document vectors.
+
+    Shared naming contract between where vectors are written (`ingest_document`)
+    and where they're deleted (`documents.signals`) -- both must agree on this
+    string or deletes silently miss the collection they should be clearing.
+    """
+    return f"org_{organization_id}"
+
+
 class ChromaDBClient:
     """Wrapper around a per-organization ChromaDB collection."""
 
@@ -163,7 +173,9 @@ def ingest_document(document: Any) -> None:
     if not chunks:
         return
 
-    client = ChromaDBClient(collection_name=f"org_{document.organization_id}")
+    client = ChromaDBClient(
+        collection_name=get_organization_collection_name(document.organization_id)
+    )
     client.delete_by_document_id(str(document.id))
     client.add_documents(
         [

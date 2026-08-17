@@ -16,6 +16,7 @@ export interface Document {
   organization: string;
   doc_type: DocumentType;
   status: DocumentStatus;
+  file: string | null;
   file_path: string;
   latest_agent_run_id: string | null;
   created_at: string;
@@ -28,6 +29,9 @@ export interface Answer {
   agent_run: string;
   question_text: string;
   content: string;
+  executive_summary: string;
+  risk_flags: string[];
+  action_items: string[];
   confidence_score: number | null;
   is_verified: boolean;
   created_at: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -117,7 +118,14 @@ export function RecentRunsTable({
                   key={document.id}
                   className="border-b border-white/5 text-white/80 last:border-b-0 hover:bg-white/[0.03]"
                 >
-                  <td className="max-w-xs truncate px-4 py-2.5">{displayName(document)}</td>
+                  <td className="max-w-xs truncate px-4 py-2.5">
+                    <Link
+                      href={`/dashboard/document/${document.id}`}
+                      className="hover:text-white hover:underline"
+                    >
+                      {displayName(document)}
+                    </Link>
+                  </td>
                   <td className="px-4 py-2.5 text-white/60">
                     {DOC_TYPE_LABELS[document.doc_type]}
                   </td>

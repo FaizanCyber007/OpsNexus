@@ -625,71 +625,78 @@ You are the UX/UI Architect for "OpsNexus".
 [EXECUTION CONSTRAINTS]
 Run `npm run lint`. Fix any TypeScript type mismatches for the new JSON logs.
 Commit: `git add . && git commit -m "feat: expose tool-call tracing logs to frontend for live agent visualization"`
+
+---
+
+## Prompt 14
+
 ```
+[SYSTEM CONTEXT]
+You are a Lead Backend Architect for "OpsNexus".
+- Stack: Django 5, DRF, PostgreSQL, ChromaDB.
+- Goal: Fix critical memory desync bugs and abstract the file storage for cloud readiness (Core Week 6).
+- Constraints: No Celery/Redis yet. Use `black` and `flake8` for linting.
 
-Auditing the actual data before writing any UI surfaced the real blocker: only **one**
-`ToolCall` row was ever persisted per run -- the Supervisor's classification decision.
-The Sales Worker's real tool calls (`search_company_knowledge`, the MCP pricing
-lookup) happened inside LangGraph's `create_react_agent` ReAct loop and were never
-written to the database, only existing transiently in that node's message history.
-A trace UI on top of that data would have shown one static step forever, not a real
-chain of thought. Confirmed with you: extended `orchestration/graph.py` with a new
-`_extract_tool_calls()` that walks the ReAct agent's message history, pairing each
-`AIMessage.tool_calls` entry with its answering `ToolMessage` by id, and
-`agent_runner.py` now persists each one as its own `ToolCall` row (sequential
-`await acreate()` calls, not `asyncio.gather`, so timestamps stay monotonically
-ordered) alongside the existing supervisor-classification row.
+[YOUR TASK: MEMORY SYNC & CLOUD STORAGE ABSTRACTION]
+1. ChromaDB Desync Fix (`documents/signals.py`):
+   - When a `Document` is deleted (or soft-deleted) via the DRF API, its vectors remain in ChromaDB, causing the agent to retrieve ghost data.
+   - Implement a Django `post_delete` (and/or `post_save` for soft-deletes) signal. 
+   - When triggered, this signal must call the `ChromaDBClient` to permanently delete all vector embeddings associated with that specific `document_id`.
+2. Cloud Storage Abstraction (`settings.py` & `requirements.txt`):
+   - Local file uploads will break on ephemeral cloud servers. Add `django-storages` to requirements.
+   - Refactor the Django settings to use a custom storage backend. Use `FileSystemStorage` for local development, but structure the code so we only need to flip an environment variable (`USE_S3=True`) to switch to Amazon S3 in the upcoming deployment phase.
+   - Ensure the `Document` model's `FileField` utilizes this abstracted storage.
 
-Also confirmed: added `latest_agent_run_id` to `DocumentSerializer` (most recently
-created `AgentRun` for that document) so the frontend can discover which run to
-trace while a document is still "processing" -- reusing the polling
-`useDocumentPolling` already does, rather than a second polling loop.
+[EXECUTION CONSTRAINTS]
+Run `black .` and `flake8`. Write a quick Pytest in `documents/tests/` to verify that deleting a Document also triggers the ChromaDB deletion method.
 
-`agents/serializers.py` gained `ToolCallSerializer` (`tool_input`/`tool_output` are
-`JSONField(source=...)` aliases onto the model's actual `input_data`/`output_data`
-fields, matching the task's literal API contract without a migration).
-`agents/views.py` gained a bare `AgentRunViewSet(GenericViewSet)` with only the
-`tool-calls` detail action registered -- no list/retrieve mixins, so the router
-exposes exactly the one endpoint asked for and nothing more.
+---
 
-Building this surfaced a second real bug, this one in error handling: `sales_worker_node`
-raised `SalesWorkerError` from *inside* the still-open MCP session's `AsyncExitStack`,
-and anyio's task-group cleanup wrapped it in a `BaseExceptionGroup` by the time it
-reached `agent_runner.py` -- so a bare `except SalesWorkerError` never matched it,
-silently falling through to the generic handler and firing the mock fallback instead
-of marking the `Document` `failed` as designed two sessions ago. Fixed by only raising
-after the `AsyncExitStack` block has fully closed. Verified against a real (non-mocked)
-MCP session that the fix produces a plain, catchable `SalesWorkerError`.
+## Prompt 15
 
-Also discovered live: `llama-3.3-70b-versatile` (the Worker model picked two sessions
-ago) has since been fully retired from Groq's catalog -- their lineup shifted entirely
-away from Llama models. Swapped to `openai/gpt-oss-120b`, their current large
-tool-calling-capable open-weight model, reconfirmed against the live model list before
-committing to it (same pattern as the two prior model-retirement fixes this project has
-hit).
+```
+[SYSTEM CONTEXT]
+You are a Lead AI Engineer for "OpsNexus".
+- Stack: Python 3, LangGraph, Django 5.
+- Goal: Upgrade the Agent's structured output to enterprise B2B standards (Core Week 6).
 
-`AgentTraceViewer.tsx` (new) polls the tool-calls endpoint every 1.5s while a document
-is processing, renders a collapsible "Agent Thought Process" panel as a vertical
-timeline with a `tool_name` -> friendly-label map, each step expandable to its raw
-JSON input/output, a pulsing "Agent is thinking..." state before the first step lands.
-Mounted in `AnswerDisplay.tsx` -- this app's existing per-document detail card, since
-no separate "Customer 360" view exists in this codebase, per the task's own Dashboard
-fallback.
+[YOUR TASK: GRANULAR STRUCTURED OUTPUTS]
+1. Pydantic Schema Upgrade (`orchestration/schemas.py`):
+   - The final Sub-Agent output must be highly structured. Update the Pydantic schema to include:
+     - `executive_summary` (str)
+     - `risk_flags` (list of strings, e.g., ["High Churn Risk", "Missing SOC2 Policy"])
+     - `action_items` (list of strings, e.g., ["Email CFO", "Request updated invoice"])
+     - `confidence_score` (float)
+2. Database Mapping (`agents/models.py`):
+   - Update the `Answer` model to physically store these fields (use `JSONField` for lists). 
+3. LangGraph Enforcement:
+   - Update the Groq Sub-Agents to strictly conform to this new Pydantic schema using the `.with_structured_output()` method (or equivalent tool-calling enforcement).
+   - When the agent finishes, ensure the Django runner saves these granular fields into the `Answer` row correctly.
 
-Verified fully live against the real Postgres/Gemini/Groq/ChromaDB/MCP stack (not
-mocks): confirmed `latest_agent_run_id` populates on the Document response while
-status is still "pending"; confirmed the tool-calls endpoint returns steps
-chronologically as they land; confirmed a genuine (intermittent) Groq tool-choice
-failure correctly marks the Document `failed` with a clean error instead of silently
-falling back, proving the bug fix above; and confirmed a full successful run produces
-exactly the timeline shape the task described -- Supervisor classification, followed
-by real `search_company_knowledge` and `get_internal_pricing_policy` tool calls, all
-in order with correctly aliased `tool_input`/`tool_output` fields.
+[EXECUTION CONSTRAINTS]
+Run `black .` and `flake8`. Run `python manage.py makemigrations` and `migrate` for the new `Answer` model fields. Ensure no data is lost during migration.
 
-### Week 6 finalized
+---
 
-Per this task's own instruction: Week 6 closes out having implemented full document
-CRUD (list/retrieve/soft-delete, ordered and organization-scoped), strict Zod
-input validation on the frontend uploader (file type/size, red inline errors +
-toasts), and this Agent Trace UI making the LangGraph Supervisor/Worker pipeline's
-real tool executions visible live on screen for the mentor demo.
+## Prompt 16
+
+```
+[SYSTEM CONTEXT]
+You are a Lead UI/UX Architect for "OpsNexus".
+- Stack: Next.js 14, Tailwind CSS, TypeScript.
+- Goal: Elevate the UI to Enterprise SaaS standards, utilizing the new structured AI data (Core Week 6).
+
+[YOUR TASK: SPLIT-PANE UI & STRUCTURED RENDERING]
+1. Integrated Split-Pane Viewer (`app/dashboard/document/[id]/page.tsx`):
+   - Replace the basic document view with an Enterprise Split-Pane layout (e.g., using Tailwind grid/flex).
+   - Left Pane: Embed an `iframe` or PDF Viewer component that displays the raw uploaded document directly in the browser. (Ensure it uses the secure file URL from Django).
+   - Right Pane: The "Agent Intelligence" panel.
+2. Structured Data Rendering:
+   - Update `apiClient.ts` and the frontend TypeScript interfaces to expect the new `risk_flags` and `action_items` arrays.
+   - In the Right Pane, do not just render text. 
+   - Render `risk_flags` as prominent red/yellow warning badges (Chips).
+   - Render `action_items` as a beautiful Checklist UI (with empty circles next to them, mimicking a task manager).
+   - Render the `executive_summary` as the main text block.
+
+[EXECUTION CONSTRAINTS]
+Run `npm run lint`. Ensure the split-pane layout is fully responsive (stacks vertically on mobile, side-by-side on desktop). Maintain the premium dark-mode, glassmorphic design system.

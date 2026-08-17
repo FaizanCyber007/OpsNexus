@@ -7,8 +7,9 @@ from agents.models import AgentRun, Answer, ToolCall
 from documents.factories import DocumentFactory
 from documents.models import Document
 from orchestration.agent_runner import trigger_agent_run
-from orchestration.graph import SalesWorkerError, StructuredAnswer
+from orchestration.graph import SalesWorkerError
 from orchestration.model_client import LLMConfigurationError
+from orchestration.schemas import StructuredAnswer
 
 
 @pytest.mark.django_db(transaction=True)
@@ -79,7 +80,11 @@ class TestTriggerAgentRun:
     def test_successful_sales_rfp_creates_answer_and_completes_document(self):
         document = DocumentFactory()
         answer = StructuredAnswer(
-            content="Here is our RFP response.", confidence_score=0.9
+            content="Here is our RFP response.",
+            executive_summary="We can meet all requirements with minor caveats.",
+            risk_flags=["Missing SOC2 Policy"],
+            action_items=["Email CFO", "Request updated invoice"],
+            confidence_score=0.9,
         )
 
         with (
@@ -111,11 +116,23 @@ class TestTriggerAgentRun:
 
         saved_answer = Answer.objects.get(agent_run=run)
         assert saved_answer.content == "Here is our RFP response."
+        assert (
+            saved_answer.executive_summary
+            == "We can meet all requirements with minor caveats."
+        )
+        assert saved_answer.risk_flags == ["Missing SOC2 Policy"]
+        assert saved_answer.action_items == ["Email CFO", "Request updated invoice"]
         assert saved_answer.confidence_score == 0.9
 
     def test_worker_tool_calls_are_persisted_in_order(self):
         document = DocumentFactory()
-        answer = StructuredAnswer(content="answer", confidence_score=0.8)
+        answer = StructuredAnswer(
+            content="answer",
+            executive_summary="summary",
+            risk_flags=["Missing SOC2 Policy"],
+            action_items=["Email CFO"],
+            confidence_score=0.8,
+        )
         worker_tool_calls = [
             {
                 "tool_name": "search_company_knowledge",

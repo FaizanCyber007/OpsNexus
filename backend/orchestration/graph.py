@@ -12,11 +12,10 @@ Worker.
 """
 
 import logging
-from typing import Any, Literal, TypedDict
-
-from pydantic import BaseModel, Field
+from typing import Any, TypedDict
 
 from orchestration.model_client import LLMConfigurationError, LLMFactory
+from orchestration.schemas import ClassificationResult, StructuredAnswer
 from orchestration.tool_registry import build_search_company_knowledge_tool
 
 logger = logging.getLogger(__name__)
@@ -28,10 +27,6 @@ class SalesWorkerError(Exception):
     from an MCP-server-unavailable condition, which is handled separately and
     gracefully -- this represents a real, user-visible failure."""
 
-
-ROUTES = Literal[
-    "sales_rfp", "invoice_reconciliation", "compliance_audit", "general_intake"
-]
 
 # Keep prompts within a safe token budget regardless of document size.
 MAX_DOCUMENT_CHARS = 8000
@@ -53,19 +48,9 @@ carefully, use the `search_company_knowledge` tool to find relevant prior \
 answers or policies from this organization's history, and synthesize a \
 concise, accurate draft response. If no relevant prior context exists, say \
 so plainly rather than inventing facts, and lower your confidence score \
-accordingly."""
-
-
-class ClassificationResult(BaseModel):
-    route: ROUTES
-    reasoning: str = Field(
-        description="One or two sentences explaining the classification"
-    )
-
-
-class StructuredAnswer(BaseModel):
-    content: str = Field(description="The synthesized draft response")
-    confidence_score: float = Field(ge=0.0, le=1.0)
+accordingly. Also identify any concrete risks (e.g. missing compliance \
+documentation, contractual red flags) and concrete next-step action items \
+a human reviewer should take before this response goes out."""
 
 
 class GraphState(TypedDict):

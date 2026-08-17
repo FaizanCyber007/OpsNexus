@@ -118,6 +118,9 @@ async def trigger_agent_run(document_id) -> None:
             agent_run=agent_run,
             question_text="Draft a response to this RFP/questionnaire.",
             content=answer.content,
+            executive_summary=answer.executive_summary,
+            risk_flags=answer.risk_flags,
+            action_items=answer.action_items,
             confidence_score=answer.confidence_score,
             is_verified=False,
         )
