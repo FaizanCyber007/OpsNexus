@@ -11,29 +11,29 @@ from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from memory.vector_client import ChromaDBClient, get_organization_collection_name
+from memory.models import PendingVectorCleanup
+from memory.vector_client import attempt_pending_cleanup
 
 from .models import Document
 
 logger = logging.getLogger(__name__)
 
 
-def _delete_document_vectors(document_id, organization_id) -> None:
-    try:
-        client = ChromaDBClient(
-            collection_name=get_organization_collection_name(organization_id)
-        )
-        client.delete_by_document_id(str(document_id))
-    except Exception:
-        logger.exception(
-            "Failed to remove ChromaDB vectors for document %s", document_id
-        )
-
-
 def _schedule_vector_cleanup(document_id, organization_id) -> None:
-    transaction.on_commit(
-        lambda: _delete_document_vectors(document_id, organization_id)
+    """Durably record that a document's vectors need deleting, then make a
+    best-effort attempt right after commit.
+
+    The PendingVectorCleanup row is written synchronously here, so it joins
+    whatever transaction is currently open (standard Django ORM behavior) --
+    a later rollback removes the pending record along with the Document
+    change that triggered it. Only the actual Chroma network call is
+    deferred; if it fails, the row survives for `retry_vector_cleanup`
+    instead of the failure being silently logged and discarded.
+    """
+    pending = PendingVectorCleanup.objects.create(
+        document_id=document_id, organization_id=organization_id
     )
+    transaction.on_commit(lambda: attempt_pending_cleanup(pending))
 
 
 @receiver(pre_save, sender=Document)

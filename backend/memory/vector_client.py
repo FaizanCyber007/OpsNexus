@@ -47,6 +47,34 @@ def _get_embeddings() -> "HuggingFaceEmbeddings":
     return _embeddings
 
 
+def attempt_pending_cleanup(pending: Any) -> bool:
+    """Try to delete one PendingVectorCleanup's vectors from Chroma.
+
+    On success the record is deleted (fully resolved). On failure the
+    record's attempt count/last_error are updated and it is kept for a later
+    retry (via the `retry_vector_cleanup` management command) instead of the
+    failure being silently logged and discarded.
+    """
+    try:
+        client = ChromaDBClient(
+            collection_name=get_organization_collection_name(pending.organization_id)
+        )
+        client.delete_by_document_id(str(pending.document_id))
+    except Exception as exc:
+        pending.attempts += 1
+        pending.last_error = str(exc)
+        pending.save(update_fields=["attempts", "last_error"])
+        logger.exception(
+            "Failed to remove ChromaDB vectors for document %s (attempt %d)",
+            pending.document_id,
+            pending.attempts,
+        )
+        return False
+    else:
+        pending.delete()
+        return True
+
+
 def get_organization_collection_name(organization_id: Any) -> str:
     """The ChromaDB collection name for one organization's document vectors.
 
@@ -169,16 +197,18 @@ def _extract_document_chunks(document: Any) -> list[str]:
     unconditional code path rather than branching on USE_S3.
     """
     suffix = os.path.splitext(document.file.name)[1]
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp_path = tmp.name
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+
+    try:
         document.file.open("rb")
         try:
-            for chunk in document.file.chunks():
-                tmp.write(chunk)
+            with open(tmp_path, "wb") as tmp:
+                for chunk in document.file.chunks():
+                    tmp.write(chunk)
         finally:
             document.file.close()
 
-    try:
         return _load_document_text(tmp_path)
     finally:
         os.remove(tmp_path)
