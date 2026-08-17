@@ -22,17 +22,39 @@ function displayName(filePath: string): string {
 export function DocumentDetailContent({ documentId }: DocumentDetailContentProps) {
   const { document } = useDocumentPolling(documentId);
   const [answers, setAnswers] = useState<Answer[] | null>(null);
+  const [answersError, setAnswersError] = useState(false);
   const { showError } = useToast();
 
   useEffect(() => {
-    if (document?.status !== "completed") return;
-    apiClient
-      .get<Answer[]>(`/documents/${documentId}/answers/`)
-      .then(setAnswers)
-      .catch(() => {
-        setAnswers([]);
+    let cancelled = false;
+
+    async function loadAnswers() {
+      // Reset immediately so a previously viewed document's stale answers
+      // (or error state) never linger while this document's own fetch is
+      // still pending.
+      setAnswers(null);
+      setAnswersError(false);
+
+      if (document?.status !== "completed") return;
+
+      try {
+        const result = await apiClient.get<Answer[]>(
+          `/documents/${documentId}/answers/`,
+        );
+        if (cancelled) return;
+        setAnswers(result);
+      } catch {
+        if (cancelled) return;
+        setAnswersError(true);
         showError("Couldn't load the answer for this document.");
-      });
+      }
+    }
+
+    loadAnswers();
+
+    return () => {
+      cancelled = true;
+    };
   }, [document?.status, documentId, showError]);
 
   const fileName = document ? displayName(document.file_path) : "Loading…";
@@ -55,7 +77,11 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
 
       <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-2">
         <DocumentPreviewPane fileUrl={document?.file ?? null} fileName={fileName} />
-        <AgentIntelligencePanel document={document} answers={answers} />
+        <AgentIntelligencePanel
+          document={document}
+          answers={answers}
+          answersError={answersError}
+        />
       </div>
     </div>
   );

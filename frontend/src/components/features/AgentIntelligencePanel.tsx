@@ -12,6 +12,7 @@ import type { Answer, Document } from "@/lib/types";
 interface AgentIntelligencePanelProps {
   document: Document | null;
   answers: Answer[] | null;
+  answersError: boolean;
 }
 
 function FullResponseDisclosure({ content }: { content: string }) {
@@ -35,9 +36,14 @@ function FullResponseDisclosure({ content }: { content: string }) {
   );
 }
 
-export function AgentIntelligencePanel({ document, answers }: AgentIntelligencePanelProps) {
+export function AgentIntelligencePanel({
+  document,
+  answers,
+  answersError,
+}: AgentIntelligencePanelProps) {
   const isPending =
     !document || document.status === "pending" || document.status === "processing";
+  const isCompleted = document?.status === "completed";
 
   return (
     <Card className="flex h-full min-h-[24rem] flex-col gap-4 overflow-y-auto lg:min-h-0">
@@ -55,18 +61,25 @@ export function AgentIntelligencePanel({ document, answers }: AgentIntelligenceP
         </div>
       )}
 
-      {document?.status === "completed" && answers === null && (
+      {isCompleted && answersError && (
+        <p className="text-sm text-status-critical">
+          Couldn&apos;t load the answer for this document.
+        </p>
+      )}
+
+      {isCompleted && !answersError && answers === null && (
         <div className="flex flex-col gap-3">
           <Shimmer className="h-3.5 w-2/3" />
           <Shimmer className="h-3.5 w-full" />
         </div>
       )}
 
-      {document?.status === "completed" && answers !== null && answers.length === 0 && (
+      {isCompleted && !answersError && answers !== null && answers.length === 0 && (
         <p className="text-sm text-white/50">No answer produced for this document.</p>
       )}
 
-      {document?.status === "completed" &&
+      {isCompleted &&
+        !answersError &&
         answers !== null &&
         answers.map((answer) => (
           <div key={answer.id} className="flex flex-col gap-4">

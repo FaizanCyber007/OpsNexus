@@ -700,3 +700,43 @@ You are a Lead UI/UX Architect for "OpsNexus".
 
 [EXECUTION CONSTRAINTS]
 Run `npm run lint`. Ensure the split-pane layout is fully responsive (stacks vertically on mobile, side-by-side on desktop). Maintain the premium dark-mode, glassmorphic design system.
+```
+
+---
+
+### Prompts 14-16: Memory Sync, Structured Output, Split-Pane UI
+
+Summary of what Prompts 14-16 actually built, and the known gaps left open rather
+than papered over:
+
+- **ChromaDB desync fix (`documents/signals.py`).** `post_delete` (hard delete) and
+  `post_save` (soft delete) both call `ChromaDBClient.delete_by_document_id`,
+  deferred via `transaction.on_commit` so a later rollback can't leave a Postgres
+  row intact but its vectors already gone. Soft-delete detection compares the row's
+  `deleted_at` before/after `.save()` (a `pre_save` snapshot) rather than trusting
+  the caller to pass `update_fields=["deleted_at"]`, so any save path -- the DRF
+  `destroy()` action, Django admin, a shell one-liner -- triggers cleanup correctly.
+  A Chroma-side failure is logged, not raised, so it can't fail the delete itself --
+  but there's no retry or reconciliation job for a failed cleanup; a Chroma outage
+  at the exact moment of deletion can still leave orphaned vectors that nothing
+  automatically re-attempts. That's a real, known gap, not solved here.
+- **Cloud storage abstraction (`settings.py`).** `USE_S3` toggles `STORAGES["default"]`
+  between `FileSystemStorage` (local dev) and `django-storages`'s `S3Storage`; the
+  `AWS_*` env vars have no default, so a misconfigured `USE_S3=True` fails loudly at
+  startup instead of silently misbehaving. `memory/vector_client.py`'s
+  `ingest_document` was updated to read files via the storage-agnostic
+  `document.file.open()`/`.chunks()` API instead of `document.file.path` --
+  `S3Storage` has no `.path` and raises `NotImplementedError`, which would have
+  silently broken ingestion the moment `USE_S3=True` without this fix.
+- **Granular structured output.** `StructuredAnswer` (`orchestration/schemas.py`)
+  and the `Answer` model both carry `executive_summary`/`risk_flags`/`action_items`
+  now. `risk_flags` is a plain `list[str]` with no severity field -- the frontend
+  renders every flag with the same (red) styling rather than a fabricated red/yellow
+  split the schema has no data to support. Adding real severity would mean a schema
+  + migration + serializer + frontend-type change across the stack, not a small fix.
+- **Split-pane document detail page.** The file URL embedded in the left pane
+  (`document.file`, DRF's absolute `FileField` URL) is served with no
+  authentication or authorization check -- this app has no auth system anywhere yet
+  (every endpoint is open), a pre-existing gap from before this task, not something
+  newly introduced. Anyone who knows or guesses a document's UUID can view its file
+  and answers. Worth a dedicated task once auth exists at all.

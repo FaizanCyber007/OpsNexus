@@ -15,6 +15,7 @@ document is actually ingested.
 
 import logging
 import os
+import tempfile
 import threading
 from typing import TYPE_CHECKING, Any
 
@@ -156,6 +157,33 @@ def _load_document_text(file_path: str) -> list[str]:
     return _get_text_splitter().split_text(text)
 
 
+def _extract_document_chunks(document: Any) -> list[str]:
+    """Stage a Document's file to a local temp path, then extract/chunk it.
+
+    `extract_text` needs a real filesystem path (PyPDFLoader/Docx2txtLoader
+    both require one) -- `document.file.path` only works for storage backends
+    with local filesystem access. `django-storages`'s `S3Storage` (wired up
+    via settings.USE_S3) has no `.path` and raises `NotImplementedError`.
+    Reading through `document.file.open()`/`.chunks()` instead works
+    identically for every storage backend, local included, so this is one
+    unconditional code path rather than branching on USE_S3.
+    """
+    suffix = os.path.splitext(document.file.name)[1]
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp_path = tmp.name
+        document.file.open("rb")
+        try:
+            for chunk in document.file.chunks():
+                tmp.write(chunk)
+        finally:
+            document.file.close()
+
+    try:
+        return _load_document_text(tmp_path)
+    finally:
+        os.remove(tmp_path)
+
+
 def ingest_document(document: Any) -> None:
     """Embed an uploaded Document's text into its organization's memory collection.
 
@@ -169,7 +197,7 @@ def ingest_document(document: Any) -> None:
         )
         return
 
-    chunks = _load_document_text(document.file.path)
+    chunks = _extract_document_chunks(document)
     if not chunks:
         return
 
