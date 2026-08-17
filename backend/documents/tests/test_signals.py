@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+from django.db import IntegrityError
 from django.utils import timezone
 
 from documents.factories import DocumentFactory
@@ -91,3 +92,32 @@ class TestDocumentVectorCleanupSignals:
         pending = PendingVectorCleanup.objects.get(document_id=document_id)
         assert pending.attempts == 1
         assert "down" in pending.last_error
+
+    @pytest.mark.django_db(transaction=True)
+    def test_pending_insert_failure_rolls_back_soft_delete(self):
+        """If PendingVectorCleanup.objects.create() raises, the atomic() block
+        in cleanup_vectors_on_soft_delete must roll back the Document.save()
+        so deleted_at is never persisted without a corresponding cleanup record.
+
+        The caller must wrap Document.save() in transaction.atomic() for the
+        rollback to include the document mutation -- the signal's own atomic()
+        creates a savepoint inside that outer transaction, and a savepoint
+        rollback undoes everything since the savepoint, including the save().
+        """
+        from django.db import transaction as db_transaction
+
+        document = DocumentFactory()
+        original_deleted_at = document.deleted_at  # None for a fresh document
+
+        with patch(
+            "memory.models.PendingVectorCleanup.objects.create",
+            side_effect=IntegrityError("forced insert failure"),
+        ), pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                document.deleted_at = timezone.now()
+                document.save(update_fields=["deleted_at"])
+
+        document.refresh_from_db()
+        assert document.deleted_at == original_deleted_at
+        assert not PendingVectorCleanup.objects.filter(document_id=document.id).exists()
+

@@ -64,4 +64,5 @@ def cleanup_vectors_on_soft_delete(sender, instance, created, **kwargs):
         return
     was_deleted = getattr(instance, "_previous_deleted_at", None) is not None
     if not was_deleted and instance.deleted_at is not None:
-        _schedule_vector_cleanup(instance.id, instance.organization_id)
+        with transaction.atomic():
+            _schedule_vector_cleanup(instance.id, instance.organization_id)

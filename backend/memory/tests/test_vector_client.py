@@ -124,6 +124,39 @@ class TestAttemptPendingCleanup:
         assert pending.attempts == 1
         assert "down" in pending.last_error
 
+    def test_pending_delete_failure_returns_false_without_raising(self):
+        """A DB error while deleting the cleanup record after a successful
+        ChromaDB deletion must return False without propagating the exception
+        so subsequent retry records are still processed.
+        """
+        pending = PendingVectorCleanup.objects.create(
+            document_id=uuid.uuid4(), organization_id=uuid.uuid4()
+        )
+
+        with patch("memory.vector_client.ChromaDBClient"), patch.object(
+            pending, "delete", side_effect=Exception("db gone")
+        ):
+            result = attempt_pending_cleanup(pending)
+
+        assert result is False
+        # The record was NOT deleted because pending.delete() raised.
+        assert PendingVectorCleanup.objects.filter(pk=pending.pk).exists()
+
+    def test_save_failure_during_error_path_returns_false_without_raising(self):
+        """A DB error while persisting failure state (attempts/last_error)
+        must return False without propagating so subsequent records are processed.
+        """
+        pending = PendingVectorCleanup.objects.create(
+            document_id=uuid.uuid4(), organization_id=uuid.uuid4()
+        )
+
+        with patch(
+            "memory.vector_client.ChromaDBClient", side_effect=RuntimeError("down")
+        ), patch.object(pending, "save", side_effect=Exception("db gone")):
+            result = attempt_pending_cleanup(pending)
+
+        assert result is False
+
 
 @pytest.mark.django_db
 class TestRetryVectorCleanupCommand:

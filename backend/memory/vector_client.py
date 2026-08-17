@@ -54,6 +54,10 @@ def attempt_pending_cleanup(pending: Any) -> bool:
     record's attempt count/last_error are updated and it is kept for a later
     retry (via the `retry_vector_cleanup` management command) instead of the
     failure being silently logged and discarded.
+
+    Neither the ChromaDB deletion nor the record persistence step is allowed
+    to propagate an exception -- a failure in one record must never halt the
+    processing of subsequent retry records.
     """
     try:
         client = ChromaDBClient(
@@ -63,7 +67,14 @@ def attempt_pending_cleanup(pending: Any) -> bool:
     except Exception as exc:
         pending.attempts += 1
         pending.last_error = str(exc)
-        pending.save(update_fields=["attempts", "last_error"])
+        try:
+            pending.save(update_fields=["attempts", "last_error"])
+        except Exception as save_exc:
+            logger.exception(
+                "Failed to persist failure state for document %s cleanup record: %s",
+                pending.document_id,
+                save_exc,
+            )
         logger.exception(
             "Failed to remove ChromaDB vectors for document %s (attempt %d)",
             pending.document_id,
@@ -71,7 +82,16 @@ def attempt_pending_cleanup(pending: Any) -> bool:
         )
         return False
     else:
-        pending.delete()
+        try:
+            pending.delete()
+        except Exception as del_exc:
+            logger.exception(
+                "Failed to delete cleanup record for document %s after successful "
+                "ChromaDB deletion: %s",
+                pending.document_id,
+                del_exc,
+            )
+            return False
         return True
 
 
