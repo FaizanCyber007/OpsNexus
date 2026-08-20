@@ -9,10 +9,31 @@ strictly typed via `StructuredAnswer` (Pydantic) rather than free text.
 Other routes are left for `agent_runner` to fall back to the existing
 deterministic mock pipeline -- this graph only owns classification + the Sales
 Worker.
+
+## Production Guardrails (added in refactor)
+
+### Pydantic Auto-Correction Loop
+Both the Supervisor and the Sales Worker use `with_structured_output` /
+`response_format` to enforce Pydantic schemas.  If the LLM produces output
+that fails schema validation a `ValidationError` is caught and fed back as a
+`HumanMessage`:
+
+    "Your output failed validation: <error>. Please correct it."
+
+The loop retries up to `MAX_VALIDATION_LOOPS` (2) times before propagating
+the error.
+
+### Retry & Fallback
+Transient API errors (rate-limits, 503s) are handled transparently by the
+tenacity decorators in `model_client.py`; the Groq → Gemini fallback chain
+is also assembled there.  This module requires no additional retry logic.
 """
 
 import logging
 from typing import Any, TypedDict
+
+from langchain_core.messages import HumanMessage
+from pydantic import ValidationError
 
 from orchestration.model_client import LLMConfigurationError, LLMFactory
 from orchestration.schemas import ClassificationResult, StructuredAnswer
@@ -20,16 +41,17 @@ from orchestration.tool_registry import build_search_company_knowledge_tool
 
 logger = logging.getLogger(__name__)
 
-
-class SalesWorkerError(Exception):
-    """Raised when the Sales Worker (Groq) fails to produce an answer, after
-    the Supervisor has already classified the document as sales_rfp. Distinct
-    from an MCP-server-unavailable condition, which is handled separately and
-    gracefully -- this represents a real, user-visible failure."""
-
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
 # Keep prompts within a safe token budget regardless of document size.
 MAX_DOCUMENT_CHARS = 8000
+
+# Maximum number of *additional* correction attempts after the first
+# ValidationError.  With MAX_VALIDATION_LOOPS = 2 the LLM gets at most
+# 3 total calls (1 original + 2 corrections) before the error is re-raised.
+MAX_VALIDATION_LOOPS = 2
 
 SUPERVISOR_SYSTEM_PROMPT = """You are the Supervisor Agent for OpsNexus, a \
 B2B document-intake platform. Classify the incoming document into exactly \
@@ -53,6 +75,23 @@ documentation, contractual red flags) and concrete next-step action items \
 a human reviewer should take before this response goes out."""
 
 
+# ---------------------------------------------------------------------------
+# Custom exceptions
+# ---------------------------------------------------------------------------
+
+
+class SalesWorkerError(Exception):
+    """Raised when the Sales Worker (Groq) fails to produce an answer, after
+    the Supervisor has already classified the document as sales_rfp. Distinct
+    from an MCP-server-unavailable condition, which is handled separately and
+    gracefully -- this represents a real, user-visible failure."""
+
+
+# ---------------------------------------------------------------------------
+# Graph state
+# ---------------------------------------------------------------------------
+
+
 class GraphState(TypedDict):
     organization_id: str
     document_text: str
@@ -62,17 +101,62 @@ class GraphState(TypedDict):
     worker_tool_calls: list[dict[str, Any]]
 
 
+# ---------------------------------------------------------------------------
+# Nodes
+# ---------------------------------------------------------------------------
+
+
 async def supervisor_node(state: GraphState) -> dict:
+    """Classify the document and populate ``route`` + ``reasoning``.
+
+    Wraps the LLM call in a Pydantic auto-correction loop: if
+    `with_structured_output` raises a `ValidationError` the error is fed back
+    to the model as a correction `HumanMessage` and the call is retried up to
+    `MAX_VALIDATION_LOOPS` times.
+    """
     llm = LLMFactory().get_supervisor_llm().with_structured_output(ClassificationResult)
     document_excerpt = state["document_text"][:MAX_DOCUMENT_CHARS] or "(empty document)"
 
-    result: ClassificationResult = await llm.ainvoke(
-        [
-            ("system", SUPERVISOR_SYSTEM_PROMPT),
-            ("user", f"Document content:\n\n{document_excerpt}"),
-        ]
-    )
-    return {"route": result.route, "reasoning": result.reasoning}
+    messages: list = [
+        ("system", SUPERVISOR_SYSTEM_PROMPT),
+        ("user", f"Document content:\n\n{document_excerpt}"),
+    ]
+
+    last_exc: ValidationError | None = None
+    for attempt in range(MAX_VALIDATION_LOOPS + 1):
+        try:
+            result: ClassificationResult = await llm.ainvoke(messages)
+            return {"route": result.route, "reasoning": result.reasoning}
+        except ValidationError as exc:
+            last_exc = exc
+            if attempt == MAX_VALIDATION_LOOPS:
+                logger.error(
+                    "Supervisor: structured-output validation failed after %d "
+                    "correction attempt(s). Propagating error.",
+                    MAX_VALIDATION_LOOPS,
+                )
+                raise
+            logger.warning(
+                "Supervisor: ValidationError on attempt %d/%d — sending "
+                "auto-correction prompt.",
+                attempt + 1,
+                MAX_VALIDATION_LOOPS + 1,
+            )
+            messages.append(
+                HumanMessage(
+                    content=(
+                        f"Your output failed validation: {last_exc}. "
+                        "Please correct it."
+                    )
+                )
+            )
+
+    raise last_exc  # pragma: no cover — loop always raises or returns
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 
 def _extract_tool_calls(messages: list) -> list[dict[str, Any]]:
@@ -108,6 +192,14 @@ def _extract_tool_calls(messages: list) -> list[dict[str, Any]]:
 async def _run_sales_worker_agent(
     document_excerpt: str, tools: list
 ) -> tuple[StructuredAnswer, list[dict[str, Any]]]:
+    """Run the ReAct Sales Worker, with a Pydantic auto-correction loop.
+
+    `create_react_agent(response_format=StructuredAnswer)` enforces the schema
+    at the final answer step.  If the LLM produces malformed JSON or violates
+    the schema constraints a `ValidationError` is raised; we catch it, append
+    a correction `HumanMessage`, and re-invoke the agent (up to
+    `MAX_VALIDATION_LOOPS` extra times).
+    """
     from langgraph.prebuilt import create_react_agent
 
     agent = create_react_agent(
@@ -116,18 +208,46 @@ async def _run_sales_worker_agent(
         prompt=SALES_WORKER_SYSTEM_PROMPT,
         response_format=StructuredAnswer,
     )
-    result = await agent.ainvoke(
-        {
-            "messages": [
-                (
-                    "user",
-                    f"Document content:\n\n{document_excerpt}\n\n"
-                    "Draft a response to this RFP/questionnaire.",
-                )
-            ]
-        }
+
+    initial_user_message = (
+        "user",
+        f"Document content:\n\n{document_excerpt}\n\n"
+        "Draft a response to this RFP/questionnaire.",
     )
-    return result["structured_response"], _extract_tool_calls(result["messages"])
+    agent_messages: list = [initial_user_message]
+
+    last_exc: ValidationError | None = None
+    for attempt in range(MAX_VALIDATION_LOOPS + 1):
+        try:
+            result = await agent.ainvoke({"messages": agent_messages})
+            return result["structured_response"], _extract_tool_calls(
+                result["messages"]
+            )
+        except ValidationError as exc:
+            last_exc = exc
+            if attempt == MAX_VALIDATION_LOOPS:
+                logger.error(
+                    "Sales Worker: structured-output validation failed after "
+                    "%d correction attempt(s). Propagating error.",
+                    MAX_VALIDATION_LOOPS,
+                )
+                raise
+            logger.warning(
+                "Sales Worker: ValidationError on attempt %d/%d — sending "
+                "auto-correction prompt.",
+                attempt + 1,
+                MAX_VALIDATION_LOOPS + 1,
+            )
+            agent_messages.append(
+                HumanMessage(
+                    content=(
+                        f"Your output failed validation: {last_exc}. "
+                        "Please correct it."
+                    )
+                )
+            )
+
+    raise last_exc  # pragma: no cover — loop always raises or returns
 
 
 async def sales_worker_node(state: GraphState) -> dict:
@@ -181,8 +301,18 @@ async def sales_worker_node(state: GraphState) -> dict:
     return {"answer": answer, "worker_tool_calls": worker_tool_calls}
 
 
+# ---------------------------------------------------------------------------
+# Routing
+# ---------------------------------------------------------------------------
+
+
 def _route_after_supervisor(state: GraphState) -> str:
     return "sales_worker" if state["route"] == "sales_rfp" else "__end__"
+
+
+# ---------------------------------------------------------------------------
+# Graph construction
+# ---------------------------------------------------------------------------
 
 
 def build_graph():
