@@ -102,3 +102,9 @@ class DocumentViewSet(ModelViewSet):
             "created_at"
         )
         return Response(AnswerSerializer(answers, many=True).data)
+
+    @action(detail=True, methods=["post"])
+    def chat(self, request, pk=None):
+        from orchestration.views import DocumentChatView
+
+        return DocumentChatView().post(request, pk=pk)

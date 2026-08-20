@@ -47,3 +47,50 @@ export interface ToolCall {
   tool_output: unknown;
   created_at: string;
 }
+
+export interface DocumentChunk {
+  text: string;
+  metadata?: Record<string, unknown>;
+  distance?: number;
+}
+
+export interface ModelChatResult {
+  model_name: string;
+  provider: "groq" | "gemini" | string;
+  response: string;
+  execution_time_ms: number;
+  status: "success" | "error";
+  error?: string;
+  is_simulated?: boolean;
+}
+
+export interface DocumentChatResponse {
+  compare: boolean;
+  question: string;
+  retrieved_context: DocumentChunk[];
+  results?: {
+    groq: ModelChatResult;
+    gemini: ModelChatResult;
+    [key: string]: ModelChatResult;
+  };
+  result?: ModelChatResult;
+  faster_model?: "groq" | "gemini" | string | null;
+  time_diff_ms?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: "user" | "assistant";
+  question?: string;
+  compare?: boolean;
+  retrieved_context?: DocumentChunk[];
+  results?: {
+    groq: ModelChatResult;
+    gemini: ModelChatResult;
+  };
+  result?: ModelChatResult;
+  faster_model?: string | null;
+  time_diff_ms?: number;
+  timestamp: string;
+  isPending?: boolean;
+}

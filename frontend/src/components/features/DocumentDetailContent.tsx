@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { AgentIntelligencePanel } from "@/components/features/AgentIntelligencePanel";
+import { DocumentChatPanel } from "@/components/features/DocumentChatPanel";
 import { DocumentPreviewPane } from "@/components/features/DocumentPreviewPane";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/contexts/ToastContext";
@@ -23,6 +24,7 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
   const { document } = useDocumentPolling(documentId);
   const [answers, setAnswers] = useState<Answer[] | null>(null);
   const [answersError, setAnswersError] = useState(false);
+  const [activeTab, setActiveTab] = useState<"intelligence" | "chat">("chat");
   const { showError } = useToast();
 
   useEffect(() => {
@@ -77,11 +79,47 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
 
       <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-2">
         <DocumentPreviewPane fileUrl={document?.file ?? null} fileName={fileName} />
-        <AgentIntelligencePanel
-          document={document}
-          answers={answers}
-          answersError={answersError}
-        />
+
+        <div className="flex flex-col gap-3 min-h-[30rem] lg:min-h-0">
+          {/* Tab Navigation Controls */}
+          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-1 backdrop-blur-md">
+            <button
+              type="button"
+              onClick={() => setActiveTab("chat")}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-all ${
+                activeTab === "chat"
+                  ? "bg-indigo-600 text-white shadow-md font-semibold"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <span>💬 Document Chat & Arena</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("intelligence")}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-all ${
+                activeTab === "intelligence"
+                  ? "bg-indigo-600 text-white shadow-md font-semibold"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <span>📊 Agent Intelligence</span>
+            </button>
+          </div>
+
+          {/* Active Tab View */}
+          <div className="flex-1 min-h-0">
+            {activeTab === "chat" ? (
+              <DocumentChatPanel document={document} documentId={documentId} />
+            ) : (
+              <AgentIntelligencePanel
+                document={document}
+                answers={answers}
+                answersError={answersError}
+              />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,3 +1,5 @@
+import type { DocumentChatResponse } from "./types";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export class ApiError extends Error {
@@ -53,4 +55,12 @@ export const apiClient = {
             : undefined,
     }),
   delete: <T = void>(path: string) => request<T>(path, { method: "DELETE" }),
+  chatDocument: (
+    documentId: string,
+    data: { question: string; compare?: boolean },
+  ) =>
+    request<DocumentChatResponse>(`/v1/documents/${documentId}/chat/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

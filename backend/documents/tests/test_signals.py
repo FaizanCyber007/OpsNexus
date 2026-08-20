@@ -120,4 +120,3 @@ class TestDocumentVectorCleanupSignals:
         document.refresh_from_db()
         assert document.deleted_at == original_deleted_at
         assert not PendingVectorCleanup.objects.filter(document_id=document.id).exists()
-

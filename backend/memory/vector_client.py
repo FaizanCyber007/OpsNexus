@@ -147,10 +147,15 @@ class ChromaDBClient:
         store = self.initialize_collection()
         store.delete(where={"document_id": document_id})
 
-    def semantic_search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
+    def semantic_search(
+        self, query: str, top_k: int = 5, document_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """Return the top_k most semantically similar chunks to `query`."""
         store = self.initialize_collection()
-        results = store.similarity_search_with_score(query, k=top_k)
+        kwargs: dict[str, Any] = {"k": top_k}
+        if document_id is not None:
+            kwargs["filter"] = {"document_id": str(document_id)}
+        results = store.similarity_search_with_score(query, **kwargs)
         return [
             {"text": doc.page_content, "metadata": doc.metadata, "distance": score}
             for doc, score in results

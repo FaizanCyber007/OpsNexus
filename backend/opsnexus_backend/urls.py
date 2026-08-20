@@ -23,6 +23,7 @@ from rest_framework.routers import DefaultRouter
 
 from agents.views import AgentRunViewSet
 from documents.views import DocumentViewSet
+from orchestration.views import DocumentChatView
 
 router = DefaultRouter()
 router.register(r"documents", DocumentViewSet, basename="document")
@@ -30,6 +31,22 @@ router.register(r"agent-runs", AgentRunViewSet, basename="agent-run")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path(
+        "api/v1/documents/<uuid:document_id>/chat/",
+        DocumentChatView.as_view(),
+        name="document-chat-v1",
+    ),
+    path(
+        "api/v1/documents/<str:document_id>/chat/",
+        DocumentChatView.as_view(),
+        name="document-chat-v1-str",
+    ),
+    path(
+        "api/documents/<uuid:document_id>/chat/",
+        DocumentChatView.as_view(),
+        name="document-chat",
+    ),
+    path("api/v1/", include(router.urls)),
     path("api/", include(router.urls)),
 ]
 
