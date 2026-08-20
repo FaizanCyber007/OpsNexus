@@ -252,3 +252,18 @@ class TestDocumentAnswersEndpoint:
         response = api_client.get("/api/documents/not-a-valid-uuid/answers/")
 
         assert response.status_code == 404
+
+    def test_answers_query_optimized_with_select_related(
+        self, api_client, django_assert_num_queries
+    ):
+        document = DocumentFactory()
+        agent_run = AgentRunFactory(document=document)
+        for i in range(5):
+            AnswerFactory(agent_run=agent_run, content=f"Answer {i}")
+
+        # Should execute a fixed small number of queries
+        # (Document lookup + Answer query + prefetch)
+        with django_assert_num_queries(3):
+            response = api_client.get(f"/api/documents/{document.id}/answers/")
+            assert response.status_code == 200
+            assert len(response.data) == 5

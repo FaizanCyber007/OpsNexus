@@ -20,12 +20,14 @@ class Document(BaseModel):
         Organization,
         on_delete=models.CASCADE,
         related_name="documents",
+        db_index=True,
     )
-    doc_type = models.CharField(max_length=30, choices=DocType.choices)
+    doc_type = models.CharField(max_length=30, choices=DocType.choices, db_index=True)
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
+        db_index=True,
     )
     file = models.FileField(upload_to="documents/%Y/%m/%d/", blank=True, null=True)
     file_path = models.CharField(max_length=1024, blank=True, default="")

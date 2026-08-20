@@ -35,6 +35,7 @@ class AgentRun(BaseModel):
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
+        db_index=True,
     )
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -50,7 +51,7 @@ class ToolCall(BaseModel):
         on_delete=models.CASCADE,
         related_name="tool_calls",
     )
-    tool_name = models.CharField(max_length=255)
+    tool_name = models.CharField(max_length=255, db_index=True)
     input_data = models.JSONField(default=dict)
     output_data = models.JSONField(default=dict, blank=True)
 

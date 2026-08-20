@@ -12,6 +12,13 @@ def api_client():
     return APIClient()
 
 
+@pytest.fixture(autouse=True)
+def reset_llm_api_keys(monkeypatch):
+    """Ensure tests run simulated fallbacks by default without live network calls."""
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+
+
 @pytest.mark.django_db
 class TestDocumentChatEndpoint:
     def test_single_model_chat_success(self, api_client):
@@ -177,3 +184,129 @@ class TestDocumentChatEndpoint:
             response.data["results"]["gemini"]["response"]
             == "Real model generated answer for the question."
         )
+
+    def test_exact_same_question_returns_cached_response(self, api_client):
+        from django.core.cache import cache
+
+        cache.clear()
+        document = DocumentFactory()
+        mock_chat_data = {
+            "compare": False,
+            "question": "What is the return policy?",
+            "retrieved_context": [
+                {"text": "Cached chunk text", "metadata": {}, "distance": 0.1}
+            ],
+            "result": {
+                "model_name": "Gemini Flash (gemini-2.5-flash)",
+                "provider": "gemini",
+                "response": "The return policy is 30 days.",
+                "execution_time_ms": 150,
+                "status": "success",
+            },
+        }
+
+        with (
+            patch(
+                "orchestration.views._retrieve_document_context",
+                return_value=[
+                    {"text": "Cached chunk text", "metadata": {}, "distance": 0.1}
+                ],
+            ) as mock_retrieve,
+            patch(
+                "orchestration.views._execute_chat_routing",
+                new=AsyncMock(return_value=mock_chat_data),
+            ) as mock_exec,
+        ):
+            # First request (cache miss)
+            resp1 = api_client.post(
+                f"/api/v1/documents/{document.id}/chat/",
+                {"question": "What is the return policy?", "compare": False},
+                format="json",
+            )
+            assert resp1.status_code == 200
+            assert mock_retrieve.call_count == 1
+            assert mock_exec.call_count == 1
+
+            # Second identical request (cache hit)
+            resp2 = api_client.post(
+                f"/api/v1/documents/{document.id}/chat/",
+                {"question": "What is the return policy?", "compare": False},
+                format="json",
+            )
+            assert resp2.status_code == 200
+            # Context retrieval and routing execution are NOT called again
+            assert mock_retrieve.call_count == 1
+            assert mock_exec.call_count == 1
+            assert resp2.data["question"] == resp1.data["question"]
+            assert resp2.data["result"]["response"] == resp1.data["result"]["response"]
+
+    def test_different_question_or_document_produces_cache_miss(self, api_client):
+        from django.core.cache import cache
+
+        cache.clear()
+        doc1 = DocumentFactory()
+        doc2 = DocumentFactory()
+        mock_chat_data = {
+            "compare": False,
+            "question": "Sample question",
+            "retrieved_context": [],
+            "result": {
+                "model_name": "Gemini Flash",
+                "provider": "gemini",
+                "response": "Sample answer",
+                "execution_time_ms": 100,
+                "status": "success",
+            },
+        }
+
+        with (
+            patch(
+                "orchestration.views._retrieve_document_context",
+                return_value=[],
+            ) as mock_retrieve,
+            patch(
+                "orchestration.views._execute_chat_routing",
+                new=AsyncMock(return_value=mock_chat_data),
+            ) as mock_exec,
+        ):
+            api_client.post(
+                f"/api/v1/documents/{doc1.id}/chat/",
+                {"question": "Question A"},
+                format="json",
+            )
+            api_client.post(
+                f"/api/v1/documents/{doc1.id}/chat/",
+                {"question": "Question B"},
+                format="json",
+            )
+            api_client.post(
+                f"/api/v1/documents/{doc2.id}/chat/",
+                {"question": "Question A"},
+                format="json",
+            )
+
+            assert mock_retrieve.call_count == 3
+            assert mock_exec.call_count == 3
+
+
+@pytest.mark.django_db
+class TestOpenAPISpecification:
+    def test_swagger_ui_endpoint_returns_200(self, api_client):
+        response = api_client.get("/api/v1/docs/")
+        assert response.status_code == 200
+        assert "text/html" in response["Content-Type"]
+        assert "swagger-ui" in response.content.decode("utf-8").lower()
+
+    def test_redoc_ui_endpoint_returns_200(self, api_client):
+        response = api_client.get("/api/v1/redoc/")
+        assert response.status_code == 200
+        assert "text/html" in response["Content-Type"]
+
+    def test_schema_endpoint_generates_valid_openapi_spec(self, api_client):
+        response = api_client.get("/api/v1/schema/")
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert "openapi" in content
+        assert "OpsNexus API" in content
+        assert "/api/v1/documents/" in content
+        assert "/chat/" in content

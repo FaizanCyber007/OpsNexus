@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "drf_spectacular",
     "corsheaders",
     "storages",
     "core",
@@ -167,6 +168,45 @@ else:
 
 # Local persistence dir for the memory app's Chroma collections
 CHROMA_PERSIST_DIR = BASE_DIR / "chroma_data"
+
+# Redis Cache configuration
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
+        },
+        "KEY_PREFIX": "opsnexus",
+    }
+}
+
+# Django REST Framework & OpenAPI Configuration
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "OpsNexus API",
+    "DESCRIPTION": (
+        "OpsNexus - Autonomous Operations & Document Intelligence Platform API. "
+        "Provides asynchronous document ingestion, multi-model RAG question-answering, "
+        "model arena latency comparison, and LangGraph agent execution traces."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "persistAuthorization": True,
+        "displayOperationId": True,
+        "defaultModelsExpandDepth": 2,
+        "defaultModelExpandDepth": 2,
+    },
+    "COMPONENT_SPLIT_REQUEST": True,
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

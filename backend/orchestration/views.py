@@ -8,11 +8,15 @@ measuring and comparing their execution latencies.
 """
 
 import asyncio
+import hashlib
 import logging
 import time
 from typing import Any
 
+from django.core.cache import cache
 from django.shortcuts import get_object_or_404
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -29,8 +33,21 @@ from orchestration.model_client import (
     LLMConfigurationError,
     LLMFactory,
 )
+from orchestration.serializers import (
+    DocumentChatRequestSerializer,
+    DocumentChatResponseSerializer,
+)
 
 logger = logging.getLogger(__name__)
+
+CHAT_CACHE_TTL_SECONDS = 15 * 60  # 15 minutes
+
+
+def _get_chat_cache_key(document_id: Any, question: str, compare: bool) -> str:
+    """Generate deterministic Redis cache key for document chat queries."""
+    question_hash = hashlib.sha256(question.strip().lower().encode("utf-8")).hexdigest()
+    return f"chat_cache:{document_id}:{int(compare)}:{question_hash}"
+
 
 SYSTEM_PROMPT = (
     "You are an expert AI document assistant for OpsNexus. "
@@ -289,8 +306,87 @@ async def _execute_chat_routing(
 
 
 class DocumentChatView(APIView):
-    """POST /api/v1/documents/{id}/chat/ - Interactive RAG chat & arena."""
+    """Interactive RAG Document Chat & Multi-Model Arena API."""
 
+    @extend_schema(
+        summary="Ask Question About Document (RAG Chat & Arena)",
+        description=(
+            "Queries an uploaded document using ChromaDB semantic search context. "
+            "Supports single-model generation (Gemini Flash) or multi-model "
+            "arena comparison between Groq (Llama-3 70B) and Gemini Flash "
+            "(`compare=true`). Responses are cached in Redis for 15 minutes "
+            "for identical queries on the same document."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="document_id",
+                type=str,
+                location=OpenApiParameter.PATH,
+                description="UUID or ID of the target document.",
+                required=False,
+            ),
+        ],
+        request=DocumentChatRequestSerializer,
+        responses={
+            200: DocumentChatResponseSerializer,
+            400: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+            500: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                "Single Model Request",
+                summary="Standard single-model RAG query",
+                request_only=True,
+                value={
+                    "question": "What is the liability cap specified in Section 8?",
+                    "compare": False,
+                },
+            ),
+            OpenApiExample(
+                "Arena Comparison Request",
+                summary="Multi-model latency and output comparison",
+                request_only=True,
+                value={
+                    "question": "Summarize key SLA commitments and penalty terms.",
+                    "compare": True,
+                },
+            ),
+            OpenApiExample(
+                "Single Model Response",
+                summary="Successful single-model answer",
+                response_only=True,
+                status_codes=["200"],
+                value={
+                    "compare": False,
+                    "question": "What is the liability cap specified in Section 8?",
+                    "retrieved_context": [
+                        {
+                            "text": (
+                                "Section 8: Total aggregate liability shall "
+                                "not exceed 12 months fees."
+                            ),
+                            "metadata": {
+                                "document_id": "8f8b89d4-1a35-43ea-ba8d-a411a7b45388"
+                            },
+                            "distance": 0.08,
+                        }
+                    ],
+                    "result": {
+                        "model_name": "Gemini Flash (gemini-2.5-flash)",
+                        "provider": "gemini",
+                        "response": (
+                            "The aggregate liability is capped at 12 months "
+                            "of paid fees under Section 8."
+                        ),
+                        "execution_time_ms": 284,
+                        "status": "success",
+                        "is_simulated": False,
+                    },
+                },
+            ),
+        ],
+    )
     def post(self, request, document_id=None, pk=None, *args, **kwargs):
         doc_id = document_id or pk or kwargs.get("id")
         if not doc_id:
@@ -317,8 +413,20 @@ class DocumentChatView(APIView):
             )
 
         compare = bool(request.data.get("compare", False))
-        document_name = document.file_path or f"Document {document.id}"
 
+        # Check semantic cache for exact same document + question + compare mode
+        cache_key = _get_chat_cache_key(document.id, question, compare)
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            logger.info(
+                "Redis cache hit for document %s, question '%s' (compare=%s)",
+                document.id,
+                question,
+                compare,
+            )
+            return Response(cached_result, status=status.HTTP_200_OK)
+
+        document_name = document.file_path or f"Document {document.id}"
         chunks = _retrieve_document_context(document, question, top_k=4)
 
         try:
@@ -330,6 +438,8 @@ class DocumentChatView(APIView):
                     compare=compare,
                 )
             )
+            # Cache successfully computed chat result for 15 minutes
+            cache.set(cache_key, chat_data, timeout=CHAT_CACHE_TTL_SECONDS)
             return Response(chat_data, status=status.HTTP_200_OK)
         except Exception as exc:
             logger.exception("Failed to process document chat")

@@ -700,43 +700,77 @@ You are a Lead UI/UX Architect for "OpsNexus".
 
 [EXECUTION CONSTRAINTS]
 Run `npm run lint`. Ensure the split-pane layout is fully responsive (stacks vertically on mobile, side-by-side on desktop). Maintain the premium dark-mode, glassmorphic design system.
+
+---
+
+## Prompt 17
+
+```
+[SYSTEM CONTEXT]
+You are the Lead Full-Stack Architect for "OpsNexus" (Django 5, Next.js 14).
+Stack constraint: Use `black` and `flake8` for formatting.
+Goal: Implement a Secondary AI feature and a live Multi-Model comparison tool.
+
+[YOUR TASK: INTERACTIVE RAG & MODEL ARENA]
+1. Backend Endpoint (`orchestration/views.py`):
+   - Build a `POST /api/v1/documents/{id}/chat/` endpoint.
+   - It must take a user's question, run semantic search on ChromaDB for that specific document, and route the prompt to an LLM to generate an answer.
+   - Implement Multi-Model Routing: If the request payload includes `compare=true`, the backend must execute the request asynchronously on TWO models simultaneously: `Groq (Llama-3 70B)` and `Gemini Flash`. Return both responses and their execution times.
+2. Frontend UI (`app/dashboard/document/[id]/page.tsx`):
+   - Build an interactive "Document Chat" tab next to the PDF viewer.
+   - Add a "Model Arena" toggle switch. When enabled, the chat window splits into two columns. 
+   - When the user asks a question, show elegant, independent loading states (shimmer effects) for Groq and Gemini. Render their responses side-by-side with a badge showing which model answered faster.
+3. UX Polish:
+   - Ensure "empty states" (no messages yet) look beautiful with prompt suggestions. Add clear error toasts if an API times out.
+
+[EXECUTION CONSTRAINTS]
+Ensure zero code redundancy. Update `apiClient.ts` to handle the new comparison payload. Commit using `git commit -m "feat: implement interactive document RAG and multi-model arena comparison"`.
+
+---
+
+## Prompt 18
+
+```
+[SYSTEM CONTEXT]
+You are the Principal AI Engineer for "OpsNexus".
+Goal: Harden the main LangGraph Agent with strict output validation, retry logic, and fallback handling.
+
+[YOUR TASK: PRODUCTION GUARDRAILS]
+1. Tenacity Retry Logic:
+   - Install `tenacity`.
+   - Wrap our LLM invocation calls (especially the tool-calling nodes) with exponential backoff retries (max 3 attempts). Catch `RateLimitError` and `ServiceUnavailable` errors specifically.
+2. Pydantic Output Validation & Auto-Correction:
+   - Use `with_structured_output(Schema)` on our final answer generation node.
+   - If the LLM generates invalid JSON or violates the Pydantic schema, catch the `ValidationError`. Do NOT crash. Catch the error message, feed it back to the LLM as a `HumanMessage` saying "Your output failed validation: {error}. Please correct it.", and loop back to the node (max 2 loops).
+3. Provider Fallback Handling:
+   - Implement `.with_fallbacks()` on the main Groq LLM chain. If Groq goes down completely, the LangGraph agent must seamlessly fall back to Gemini to complete the task.
+
+[EXECUTION CONSTRAINTS]
+Run `black` and `flake8`. Write a unit test mocking a validation failure to prove the auto-correction loop works. Commit using `git commit -m "refactor: add tenacity retries, pydantic auto-correction loops, and LLM fallbacks"`.
 ```
 
 ---
 
-### Prompts 14-16: Memory Sync, Structured Output, Split-Pane UI
+## Prompt 19
 
-Summary of what Prompts 14-16 actually built, and the known gaps left open rather
-than papered over:
+```
+[SYSTEM CONTEXT]
+You are the API Architect for "OpsNexus".
+Goal: Optimize database queries, implement caching, and generate the OpenAPI spec.
 
-- **ChromaDB desync fix (`documents/signals.py`).** `post_delete` (hard delete) and
-  `post_save` (soft delete) both call `ChromaDBClient.delete_by_document_id`,
-  deferred via `transaction.on_commit` so a later rollback can't leave a Postgres
-  row intact but its vectors already gone. Soft-delete detection compares the row's
-  `deleted_at` before/after `.save()` (a `pre_save` snapshot) rather than trusting
-  the caller to pass `update_fields=["deleted_at"]`, so any save path -- the DRF
-  `destroy()` action, Django admin, a shell one-liner -- triggers cleanup correctly.
-  A Chroma-side failure is logged, not raised, so it can't fail the delete itself --
-  but there's no retry or reconciliation job for a failed cleanup; a Chroma outage
-  at the exact moment of deletion can still leave orphaned vectors that nothing
-  automatically re-attempts. That's a real, known gap, not solved here.
-- **Cloud storage abstraction (`settings.py`).** `USE_S3` toggles `STORAGES["default"]`
-  between `FileSystemStorage` (local dev) and `django-storages`'s `S3Storage`; the
-  `AWS_*` env vars have no default, so a misconfigured `USE_S3=True` fails loudly at
-  startup instead of silently misbehaving. `memory/vector_client.py`'s
-  `ingest_document` was updated to read files via the storage-agnostic
-  `document.file.open()`/`.chunks()` API instead of `document.file.path` --
-  `S3Storage` has no `.path` and raises `NotImplementedError`, which would have
-  silently broken ingestion the moment `USE_S3=True` without this fix.
-- **Granular structured output.** `StructuredAnswer` (`orchestration/schemas.py`)
-  and the `Answer` model both carry `executive_summary`/`risk_flags`/`action_items`
-  now. `risk_flags` is a plain `list[str]` with no severity field -- the frontend
-  renders every flag with the same (red) styling rather than a fabricated red/yellow
-  split the schema has no data to support. Adding real severity would mean a schema
-  + migration + serializer + frontend-type change across the stack, not a small fix.
-- **Split-pane document detail page.** The file URL embedded in the left pane
-  (`document.file`, DRF's absolute `FileField` URL) is served with no
-  authentication or authorization check -- this app has no auth system anywhere yet
-  (every endpoint is open), a pre-existing gap from before this task, not something
-  newly introduced. Anyone who knows or guesses a document's UUID can view its file
-  and answers. Worth a dedicated task once auth exists at all.
+[YOUR TASK: PERFORMANCE & DOCUMENTATION]
+1. Query Optimization (N+1 Fixes):
+   - Audit all Django ViewSets (Documents, AgentRuns, ToolCalls). 
+   - Add `.select_related()` and `.prefetch_related()` where necessary. Add `db_index=True` to heavily filtered models (`organization_id`, `status`, `created_at`).
+2. Semantic Caching (Redis):
+   - Ensure `django-redis` is installed. 
+   - Cache the responses of the new `/chat/` endpoint for 15 minutes. If a user asks the exact same question on the exact same document, return the cached result immediately.
+3. OpenAPI Specification:
+   - Configure `drf-spectacular` in `settings.py`.
+   - Ensure the Swagger UI is exposed at `/api/v1/docs/`.
+   - Add detailed docstrings, `@extend_schema`, and example Pydantic responses to our critical APIs (Upload, Chat, Runs) so the auto-generated documentation is pristine.
+
+[EXECUTION CONSTRAINTS]
+Run `pytest` to ensure caching didn't break functionality. Commit using `git commit -m "perf: optimize db queries, add redis caching, and generate OpenAPI specs"`.
+```
+

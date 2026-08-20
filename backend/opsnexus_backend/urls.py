@@ -21,6 +21,12 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
+
 from agents.views import AgentRunViewSet
 from documents.views import DocumentViewSet
 from orchestration.views import DocumentChatView
@@ -31,6 +37,18 @@ router.register(r"agent-runs", AgentRunViewSet, basename="agent-run")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # OpenAPI Schema & Interactive Documentation
+    path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path(
+        "api/v1/docs/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="swagger-ui",
+    ),
+    path(
+        "api/v1/redoc/",
+        SpectacularRedocView.as_view(url_name="schema"),
+        name="redoc",
+    ),
     path(
         "api/v1/documents/<uuid:document_id>/chat/",
         DocumentChatView.as_view(),
