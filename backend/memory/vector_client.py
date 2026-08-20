@@ -178,15 +178,31 @@ def extract_text(file_path: str) -> str:
     extension = os.path.splitext(file_path)[1].lower()
 
     if extension == ".pdf":
-        from langchain_community.document_loaders import PyPDFLoader
+        try:
+            from langchain_community.document_loaders import PyPDFLoader
 
-        pages = PyPDFLoader(file_path).load()
-        text = "\n".join(page.page_content for page in pages)
+            pages = PyPDFLoader(file_path).load()
+            text = "\n".join(page.page_content for page in pages)
+        except Exception:
+            logger.warning(
+                "Skipping PDF extraction for %s: unreadable or corrupt PDF",
+                file_path,
+                exc_info=True,
+            )
+            return ""
     elif extension == ".docx":
-        from langchain_community.document_loaders import Docx2txtLoader
+        try:
+            from langchain_community.document_loaders import Docx2txtLoader
 
-        pages = Docx2txtLoader(file_path).load()
-        text = "\n".join(page.page_content for page in pages)
+            pages = Docx2txtLoader(file_path).load()
+            text = "\n".join(page.page_content for page in pages)
+        except Exception:
+            logger.warning(
+                "Skipping DOCX extraction for %s: unreadable or corrupt DOCX",
+                file_path,
+                exc_info=True,
+            )
+            return ""
     else:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
