@@ -24,7 +24,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.throttling import ChatRateThrottle
 from documents.models import Document
+
 from memory.vector_client import (
     ChromaDBClient,
     extract_text_from_fieldfile,
@@ -320,6 +322,7 @@ class DocumentChatView(APIView):
     """Interactive RAG Document Chat & Multi-Model Arena API."""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ChatRateThrottle]
 
     @extend_schema(
         summary="Ask Question About Document (RAG Chat & Arena)",

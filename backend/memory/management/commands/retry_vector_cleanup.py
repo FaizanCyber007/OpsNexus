@@ -29,7 +29,9 @@ class Command(BaseCommand):
         if limit is not None and limit > 0:
             # Materialize IDs for the sliced subset so iterator can be used safely
             target_ids = list(queryset.values_list("id", flat=True)[:limit])
-            queryset = PendingVectorCleanup.objects.filter(id__in=target_ids).order_by("created_at")
+            queryset = PendingVectorCleanup.objects.filter(id__in=target_ids).order_by(
+                "created_at"
+            )
 
         total = 0
         succeeded = 0

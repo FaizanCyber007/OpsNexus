@@ -1,8 +1,6 @@
-import asyncio
 import logging
-import threading
 
-from django.db import connection, transaction
+from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -20,8 +18,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from agents.models import AgentRun, Answer
 from agents.serializers import AnswerSerializer
-from memory.vector_client import ingest_document
-from orchestration.agent_runner import trigger_agent_run
+from core.throttling import DocumentUploadRateThrottle
 from orchestration.serializers import (
     DocumentChatRequestSerializer,
     DocumentChatResponseSerializer,
@@ -30,40 +27,9 @@ from orchestration.serializers import (
 
 from .models import Document
 from .serializers import DocumentSerializer
+from .tasks import enqueue_document_processing
 
 logger = logging.getLogger(__name__)
-
-
-def _run_mock_agent_in_background(document_id) -> None:
-    try:
-        try:
-            document = Document.objects.get(id=document_id)
-        except Document.DoesNotExist:
-            logger.exception(
-                "Document %s not found for background processing", document_id
-            )
-            return
-
-        try:
-            ingest_document(document)
-        except Exception:
-            logger.exception("Memory ingestion failed for document %s", document_id)
-
-        try:
-            asyncio.run(trigger_agent_run(document_id))
-        except Exception:
-            logger.exception("Agent run failed for document %s", document_id)
-            try:
-                document = Document.objects.get(id=document_id)
-            except Document.DoesNotExist:
-                logger.exception(
-                    "Document %s vanished while marking agent run failed", document_id
-                )
-                return
-            document.status = Document.Status.FAILED
-            document.save(update_fields=["status"])
-    finally:
-        connection.close()
 
 
 @extend_schema_view(
@@ -121,6 +87,11 @@ class DocumentViewSet(ModelViewSet):
 
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_throttles(self):
+        if getattr(self, "action", None) == "create":
+            return [DocumentUploadRateThrottle()]
+        return super().get_throttles()
 
     def get_queryset(self):
         latest_agent_run = (
@@ -187,13 +158,7 @@ class DocumentViewSet(ModelViewSet):
             document.file_path = document.file.name
             document.save(update_fields=["file_path"])
 
-        transaction.on_commit(
-            lambda: threading.Thread(
-                target=_run_mock_agent_in_background,
-                args=(document.id,),
-                daemon=True,
-            ).start()
-        )
+        transaction.on_commit(lambda: enqueue_document_processing(document.id))
 
         return Response(
             {"status": "processing", "document_id": document.id},

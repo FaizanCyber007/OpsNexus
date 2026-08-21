@@ -11,7 +11,6 @@ from documents.models import Document
 
 
 from django.contrib.auth import get_user_model
-from core.models import UserProfile
 
 User = get_user_model()
 
@@ -42,7 +41,7 @@ class TestDocumentUploadEndpoint:
         )
 
         with (
-            patch("documents.views.threading.Thread") as MockThread,
+            patch("documents.views.enqueue_document_processing") as MockEnqueue,
             patch("django.db.transaction.on_commit", side_effect=lambda func: func()),
         ):
             response = api_client.post(
@@ -57,10 +56,9 @@ class TestDocumentUploadEndpoint:
 
         assert response.status_code == 202
         assert response.data["status"] == "processing"
-        MockThread.assert_called_once()
-        MockThread.return_value.start.assert_called_once()
 
         document = Document.objects.get(id=response.data["document_id"])
+        MockEnqueue.assert_called_once_with(document.id)
         assert document.organization_id == organization.id
         # Storage may append a random suffix if a same-named file already
         # exists on disk, so check the stem + extension rather than an exact
@@ -73,7 +71,7 @@ class TestDocumentUploadEndpoint:
     def test_upload_without_file_still_succeeds(self, api_client):
         organization = OrganizationFactory()
 
-        with patch("documents.views.threading.Thread"):
+        with patch("documents.views.enqueue_document_processing"):
             response = api_client.post(
                 "/api/documents/",
                 {
@@ -91,7 +89,7 @@ class TestDocumentUploadEndpoint:
     def test_upload_missing_organization_returns_400(self, api_client):
         upload = SimpleUploadedFile("f.txt", b"content", content_type="text/plain")
 
-        with patch("documents.views.threading.Thread"):
+        with patch("documents.views.enqueue_document_processing"):
             response = api_client.post(
                 "/api/documents/",
                 {"doc_type": Document.DocType.OTHER, "file": upload},
@@ -104,7 +102,7 @@ class TestDocumentUploadEndpoint:
     def test_upload_invalid_organization_returns_400(self, api_client):
         upload = SimpleUploadedFile("f.txt", b"content", content_type="text/plain")
 
-        with patch("documents.views.threading.Thread"):
+        with patch("documents.views.enqueue_document_processing"):
             response = api_client.post(
                 "/api/documents/",
                 {
@@ -117,14 +115,14 @@ class TestDocumentUploadEndpoint:
 
         assert response.status_code == 400
 
-    def test_upload_spawns_background_thread_targeting_the_new_document(
+    def test_upload_enqueues_background_task_targeting_the_new_document(
         self, api_client
     ):
         organization = OrganizationFactory()
         upload = SimpleUploadedFile("f.txt", b"content", content_type="text/plain")
 
         with (
-            patch("documents.views.threading.Thread") as MockThread,
+            patch("documents.views.enqueue_document_processing") as MockEnqueue,
             patch("django.db.transaction.on_commit", side_effect=lambda func: func()),
         ):
             response = api_client.post(
@@ -138,9 +136,7 @@ class TestDocumentUploadEndpoint:
             )
 
         document_id = response.data["document_id"]
-        _, kwargs = MockThread.call_args
-        assert kwargs["args"] == (document_id,)
-        assert kwargs["daemon"] is True
+        MockEnqueue.assert_called_once_with(document_id)
 
 
 @pytest.mark.django_db

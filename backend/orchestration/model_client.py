@@ -105,7 +105,7 @@ class LLMFactory:
 
     @staticmethod
     def apply_retry_policy(runnable):
-        """Public helper to wrap any Runnable with the project's standard retry policy."""
+        """Wrap any Runnable with the project's standard retry policy."""
         return _apply_retry_policy(runnable)
 
     def get_supervisor_llm(self):

@@ -110,7 +110,7 @@ class TestFullPipelineHttpE2E:
         )
 
         with (
-            patch("documents.views.threading.Thread") as MockThread,
+            patch("documents.views.enqueue_document_processing") as MockEnqueue,
             patch("django.db.transaction.on_commit", side_effect=lambda func: func()),
         ):
             upload_response = api_client.post(
@@ -131,12 +131,8 @@ class TestFullPipelineHttpE2E:
         document_id = upload_response.data["document_id"]
         assert document_id is not None
 
-        # Verify background Thread was initialized and started with correct args
-        MockThread.assert_called_once()
-        _, kwargs = MockThread.call_args
-        assert kwargs["args"] == (document_id,)
-        assert kwargs["daemon"] is True
-        MockThread.return_value.start.assert_called_once()
+        # Verify background task was enqueued with the document ID
+        MockEnqueue.assert_called_once_with(document_id)
 
         # Verify initial document row state in database
         document = Document.objects.get(id=document_id)
@@ -287,7 +283,8 @@ class TestFullPipelineHttpE2E:
         assert gemini_res["status"] == "success"
         assert isinstance(gemini_res["execution_time_ms"], int)
 
-        # In simulated mode (no API keys configured in test), faster_model and time_diff_ms are None
+        # In simulated mode (no API keys configured in test),
+        # faster_model and time_diff_ms are None
         assert arena_data["faster_model"] is None
         assert arena_data["time_diff_ms"] is None
 
@@ -316,7 +313,7 @@ class TestFullPipelineHttpE2E:
         )
 
         with (
-            patch("documents.views.threading.Thread") as MockThread,
+            patch("documents.views.enqueue_document_processing") as MockEnqueue,
             patch("django.db.transaction.on_commit", side_effect=lambda func: func()),
         ):
             response = api_client.post(
@@ -331,7 +328,7 @@ class TestFullPipelineHttpE2E:
 
         assert response.status_code == 202
         doc_id = response.data["document_id"]
-        MockThread.assert_called_once()
+        MockEnqueue.assert_called_once_with(doc_id)
 
         document = Document.objects.get(id=doc_id)
         document.status = Document.Status.COMPLETED
@@ -361,7 +358,7 @@ class TestFullPipelineHttpE2E:
         )
 
         with (
-            patch("documents.views.threading.Thread") as MockThread,
+            patch("documents.views.enqueue_document_processing") as MockEnqueue,
             patch("django.db.transaction.on_commit", side_effect=lambda func: func()),
         ):
             response = api_client.post(
@@ -376,7 +373,7 @@ class TestFullPipelineHttpE2E:
 
         assert response.status_code == 202
         doc_id = response.data["document_id"]
-        MockThread.assert_called_once()
+        MockEnqueue.assert_called_once_with(doc_id)
 
         document = Document.objects.get(id=doc_id)
         agent_profile, _ = AgentProfile.objects.get_or_create(
@@ -417,7 +414,7 @@ class TestFullPipelineHttpE2E:
         upload = SimpleUploadedFile("temp_doc.txt", b"Temporary confidential terms.")
 
         with (
-            patch("documents.views.threading.Thread"),
+            patch("documents.views.enqueue_document_processing"),
             patch("django.db.transaction.on_commit", side_effect=lambda func: func()),
         ):
             upload_res = api_client.post(
@@ -449,7 +446,9 @@ class TestFullPipelineHttpE2E:
             delete_res = api_client.delete(f"/api/documents/{doc_id}/")
 
         assert delete_res.status_code == 204
-        MockChroma.return_value.delete_by_document_id.assert_called_once_with(str(doc_id))
+        MockChroma.return_value.delete_by_document_id.assert_called_once_with(
+            str(doc_id)
+        )
 
         # Verify soft delete in DB
         doc.refresh_from_db()

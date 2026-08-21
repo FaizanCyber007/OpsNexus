@@ -57,7 +57,11 @@ async def build_mcp_tools(client: Client) -> list[Any]:
 
         def make_tool(t_name: str, t_description: str, t_schema: Any):
             tool_kwargs: dict[str, Any] = {"description": t_description}
-            if t_schema is not None and isinstance(t_schema, dict) and t_schema.get("properties"):
+            if (
+                t_schema is not None
+                and isinstance(t_schema, dict)
+                and t_schema.get("properties")
+            ):
                 tool_kwargs["args_schema"] = t_schema
 
             @tool(t_name, **tool_kwargs)
@@ -70,11 +74,17 @@ async def build_mcp_tools(client: Client) -> list[Any]:
                     block.text
                     for block in result.content
                     if isinstance(block, TextContent)
-                    or (hasattr(block, "text") and getattr(block, "type", "text") == "text")
+                    or (
+                        hasattr(block, "text")
+                        and getattr(block, "type", "text") == "text"
+                    )
                 ]
                 output = "\n".join(text_blocks)
                 if is_error:
-                    raise RuntimeError(f"MCP tool '{t_name}' returned an error: {output or 'Tool execution failed'}")
+                    err_text = output or "Tool execution failed"
+                    raise RuntimeError(
+                        f"MCP tool '{t_name}' returned an error: {err_text}"
+                    )
                 return output
 
             return _call

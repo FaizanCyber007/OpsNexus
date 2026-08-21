@@ -28,12 +28,15 @@ from drf_spectacular.views import (
 )
 
 from agents.views import AgentRunViewSet
+from core.views import AuditLogViewSet
 from documents.views import DocumentViewSet
 from orchestration.views import DocumentChatView
 
 router = DefaultRouter()
 router.register(r"documents", DocumentViewSet, basename="document")
 router.register(r"agent-runs", AgentRunViewSet, basename="agent-run")
+router.register(r"audit-logs", AuditLogViewSet, basename="audit-log")
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
