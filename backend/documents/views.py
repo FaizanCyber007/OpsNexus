@@ -18,6 +18,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from agents.models import AgentRun, Answer
 from agents.serializers import AnswerSerializer
+from core.middleware import AuditLogContextMixin
 from core.throttling import DocumentUploadRateThrottle
 from orchestration.serializers import (
     DocumentChatRequestSerializer,
@@ -82,7 +83,7 @@ logger = logging.getLogger(__name__)
         },
     ),
 )
-class DocumentViewSet(ModelViewSet):
+class DocumentViewSet(AuditLogContextMixin, ModelViewSet):
     """ViewSet for uploading, querying, and managing documents."""
 
     serializer_class = DocumentSerializer

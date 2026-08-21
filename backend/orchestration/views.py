@@ -24,6 +24,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.middleware import AuditLogContextMixin
 from core.throttling import ChatRateThrottle
 from documents.models import Document
 
@@ -277,25 +278,24 @@ async def _execute_chat_routing(
             groq_result.get("is_simulated") or gemini_result.get("is_simulated")
         )
 
-        if is_simulated:
-            faster_model = None
-            time_diff_ms = None
-        else:
+        faster_model = None
+        time_diff_ms = None
+
+        if (
+            not is_simulated
+            and groq_result.get("status") == "success"
+            and gemini_result.get("status") == "success"
+        ):
             groq_time = groq_result.get("execution_time_ms", 0)
             gemini_time = gemini_result.get("execution_time_ms", 0)
-
-            faster_model = None
-            if (
-                groq_result.get("status") == "success"
-                and gemini_result.get("status") == "success"
-            ):
-                faster_model = "groq" if groq_time < gemini_time else "gemini"
-            elif groq_result.get("status") == "success":
-                faster_model = "groq"
-            elif gemini_result.get("status") == "success":
-                faster_model = "gemini"
-
             time_diff_ms = abs(gemini_time - groq_time)
+
+            if groq_time < gemini_time:
+                faster_model = "groq"
+            elif gemini_time < groq_time:
+                faster_model = "gemini"
+            else:
+                faster_model = None
 
         return {
             "compare": True,
@@ -318,7 +318,7 @@ async def _execute_chat_routing(
     }
 
 
-class DocumentChatView(APIView):
+class DocumentChatView(AuditLogContextMixin, APIView):
     """Interactive RAG Document Chat & Multi-Model Arena API."""
 
     permission_classes = [IsAuthenticated]

@@ -103,18 +103,24 @@ class TestSOC2AuditLogSignals:
         finally:
             reset_audit_context(tokens)
 
-    def test_non_admin_member_does_not_trigger_audit_log(self, org_member):
+    def test_member_action_creates_audit_log(self, org_member):
         user, org = org_member
         tokens = set_audit_context(user=user, ip_address="192.168.1.200")
 
         try:
-            HealthRule.objects.create(
+            rule = HealthRule.objects.create(
                 organization=org,
                 name="Member Rule",
                 metric="error_rate",
                 threshold=5.0,
             )
-            assert AuditLog.objects.count() == 0
+            log = AuditLog.objects.filter(
+                resource_type="HealthRule", resource_id=str(rule.id)
+            ).first()
+            assert log is not None
+            assert log.user == user
+            assert log.organization == org
+            assert log.ip_address == "192.168.1.200"
         finally:
             reset_audit_context(tokens)
 
@@ -213,3 +219,31 @@ class TestAuditLogsAPIEndpoint:
             },
         )
         assert response.status_code == 405
+
+    def test_superuser_filter_invalid_organization_uuid_returns_400(self):
+        superuser = User.objects.create_superuser(
+            username="superadmin", email="super@example.com", password="password"
+        )
+        client = APIClient()
+        client.force_authenticate(user=superuser)
+
+        response = client.get("/api/v1/audit-logs/?organization=invalid-uuid-123")
+        assert response.status_code == 400
+        assert "organization" in response.data
+
+    def test_superuser_filter_valid_organization_uuid(self):
+        superuser = User.objects.create_superuser(
+            username="superadmin2", email="super2@example.com", password="password"
+        )
+        org1 = OrganizationFactory()
+        org2 = OrganizationFactory()
+        log1 = AuditLogFactory(organization=org1, action=AuditLog.Action.CREATE)
+        AuditLogFactory(organization=org2, action=AuditLog.Action.CREATE)
+
+        client = APIClient()
+        client.force_authenticate(user=superuser)
+
+        response = client.get(f"/api/v1/audit-logs/?organization={org1.id}")
+        assert response.status_code == 200
+        assert len(response.data) == 1
+        assert response.data[0]["id"] == str(log1.id)

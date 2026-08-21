@@ -17,7 +17,13 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 @admin.register(HealthRule)
 class HealthRuleAdmin(admin.ModelAdmin):
-    list_display = ("name", "organization", "metric", "threshold", "is_active")
+    list_display = (
+        "name",
+        "organization",
+        "metric",
+        "threshold",
+        "is_active",
+    )
     list_filter = ("organization", "is_active")
     search_fields = ("name", "metric")
 
@@ -42,4 +48,10 @@ class AuditLogAdmin(admin.ModelAdmin):
     )
     list_filter = ("action", "resource_type", "organization")
     search_fields = ("resource_id", "user__username", "ip_address")
-    readonly_fields = [f.name for f in AuditLog._meta.fields]
+    readonly_fields = [f.name for f in getattr(AuditLog, "_meta").fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

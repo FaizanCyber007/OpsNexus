@@ -7,6 +7,7 @@ updates, or deletes monitored resources (HealthRule, Playbook, Document).
 import logging
 from typing import Any
 
+from django.db import transaction
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -42,9 +43,9 @@ def _get_organization(instance: Any, user: Any):
 @receiver(post_save, sender=Playbook)
 @receiver(post_save, sender=Document)
 def log_resource_save(sender, instance, created, **kwargs):
-    """Log CREATE or UPDATE actions performed by Organization Admins."""
+    """Log CREATE or UPDATE actions performed by authenticated actors."""
     user = get_current_user() or getattr(instance, "_audit_user", None)
-    if not is_organization_admin(user):
+    if not user or not getattr(user, "is_authenticated", False):
         return
 
     organization = _get_organization(instance, user)
@@ -60,14 +61,15 @@ def log_resource_save(sender, instance, created, **kwargs):
     ip_address = get_client_ip() or getattr(instance, "_audit_ip", None)
 
     try:
-        AuditLog.objects.create(
-            user=user if getattr(user, "is_authenticated", False) else None,
-            organization=organization,
-            action=action,
-            resource_type=sender.__name__,
-            resource_id=str(instance.pk),
-            ip_address=ip_address,
-        )
+        with transaction.atomic():
+            AuditLog.objects.create(
+                user=user if getattr(user, "is_authenticated", False) else None,
+                organization=organization,
+                action=action,
+                resource_type=sender.__name__,
+                resource_id=str(instance.pk),
+                ip_address=ip_address,
+            )
     except Exception:
         logger.exception(
             "Failed to create AuditLog for %s %s:%s",
@@ -81,9 +83,9 @@ def log_resource_save(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=Playbook)
 @receiver(post_delete, sender=Document)
 def log_resource_delete(sender, instance, **kwargs):
-    """Log DELETE actions performed by Organization Admins."""
+    """Log DELETE actions performed by authenticated actors."""
     user = get_current_user() or getattr(instance, "_audit_user", None)
-    if not is_organization_admin(user):
+    if not user or not getattr(user, "is_authenticated", False):
         return
 
     organization = _get_organization(instance, user)
@@ -98,14 +100,15 @@ def log_resource_delete(sender, instance, **kwargs):
     ip_address = get_client_ip() or getattr(instance, "_audit_ip", None)
 
     try:
-        AuditLog.objects.create(
-            user=user if getattr(user, "is_authenticated", False) else None,
-            organization=organization,
-            action=AuditLog.Action.DELETE,
-            resource_type=sender.__name__,
-            resource_id=str(instance.pk),
-            ip_address=ip_address,
-        )
+        with transaction.atomic():
+            AuditLog.objects.create(
+                user=user if getattr(user, "is_authenticated", False) else None,
+                organization=organization,
+                action=AuditLog.Action.DELETE,
+                resource_type=sender.__name__,
+                resource_id=str(instance.pk),
+                ip_address=ip_address,
+            )
     except Exception:
         logger.exception(
             "Failed to create AuditLog for DELETE %s:%s",

@@ -99,28 +99,39 @@ export function ThreeBackground() {
     window.addEventListener("resize", handleResize);
 
     // Animation Loop
-    let animationFrameId: number;
-    const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
+    let animationFrameId: number | undefined;
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-      targetX += (mouseX - targetX) * 0.03;
-      targetY += (mouseY - targetY) * 0.03;
-
-      particles.rotation.y += 0.0004;
-      particles.rotation.x += 0.0002;
-      ring.rotation.z += 0.0003;
-
-      camera.position.x = targetX * 0.4;
-      camera.position.y = -targetY * 0.4;
+    if (prefersReducedMotion) {
       camera.lookAt(scene.position);
-
       renderer.render(scene, camera);
-    };
+    } else {
+      const animate = () => {
+        animationFrameId = requestAnimationFrame(animate);
 
-    animate();
+        targetX += (mouseX - targetX) * 0.03;
+        targetY += (mouseY - targetY) * 0.03;
+
+        particles.rotation.y += 0.0004;
+        particles.rotation.x += 0.0002;
+        ring.rotation.z += 0.0003;
+
+        camera.position.x = targetX * 0.4;
+        camera.position.y = -targetY * 0.4;
+        camera.lookAt(scene.position);
+
+        renderer.render(scene, camera);
+      };
+
+      animate();
+    }
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId !== undefined) {
+        cancelAnimationFrame(animationFrameId);
+      }
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("resize", handleResize);
       if (container && renderer.domElement) {

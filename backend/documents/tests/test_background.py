@@ -1,3 +1,4 @@
+import json
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -5,7 +6,12 @@ import pytest
 
 from documents.factories import DocumentFactory
 from documents.models import Document
-from documents.tasks import enqueue_document_processing, process_document_task
+from documents.tasks import (
+    REDIS_DOCUMENT_QUEUE_KEY,
+    enqueue_document_processing,
+    process_document_task,
+    process_next_document_task,
+)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -65,13 +71,32 @@ class TestRunMockAgentInBackground:
     def test_enqueue_document_processing_pushes_to_redis(self):
         document = DocumentFactory()
 
+        with patch("documents.tasks.get_redis_connection") as mock_redis_conn:
+            mock_client = mock_redis_conn.return_value
+            result = enqueue_document_processing(str(document.id))
+
+            assert result is True
+            mock_client.rpush.assert_called_once()
+            args, _ = mock_client.rpush.call_args
+            assert args[0] == REDIS_DOCUMENT_QUEUE_KEY
+            payload = json.loads(args[1])
+            assert payload["document_id"] == str(document.id)
+
+    def test_process_next_document_task_consumes_queue(self):
+        document = DocumentFactory()
+        payload = json.dumps({"document_id": str(document.id)})
+
         with (
             patch("documents.tasks.get_redis_connection") as mock_redis_conn,
             patch("documents.tasks.process_document_task") as mock_processor,
         ):
             mock_client = mock_redis_conn.return_value
-            result = enqueue_document_processing(document.id)
+            mock_client.blpop.return_value = (
+                REDIS_DOCUMENT_QUEUE_KEY,
+                payload.encode("utf-8"),
+            )
+
+            result = process_next_document_task(timeout=1)
 
             assert result is True
-            mock_client.rpush.assert_called_once()
             mock_processor.assert_called_once_with(str(document.id))

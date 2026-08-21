@@ -14,10 +14,8 @@ import { Dropzone } from "@/components/features/Dropzone";
 import { RecentRunsTable } from "@/components/features/RecentRunsTable";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
+import { useTenant, DEMO_ORG_ID } from "@/contexts/TenantContext";
 import type { Document } from "@/lib/types";
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 interface UploadedDoc {
   id: string;
@@ -25,18 +23,13 @@ interface UploadedDoc {
 }
 
 export function DashboardContent() {
-  const [organizationIdDraft, setOrganizationIdDraft] = useState(DEMO_ORG_ID);
+  const { organizationIdDraft, organizationId, handleOrgChange: setTenantDraft } = useTenant();
   const [uploads, setUploads] = useState<UploadedDoc[]>([]);
   const [statuses, setStatuses] = useState<Record<string, Document["status"]>>({});
   const [runsVersion, setRunsVersion] = useState(0);
 
-  const organizationId = useMemo(() => {
-    const trimmed = organizationIdDraft.trim();
-    return UUID_PATTERN.test(trimmed) ? trimmed : "";
-  }, [organizationIdDraft]);
-
   const handleOrgChange = (newDraft: string) => {
-    setOrganizationIdDraft(newDraft);
+    setTenantDraft(newDraft);
     setUploads([]);
     setStatuses({});
   };
@@ -140,11 +133,12 @@ export function DashboardContent() {
 
         <CardContent className="space-y-5">
           <div>
-            <label className="block text-xs font-medium text-white/70 mb-1.5">
+            <label htmlFor="organization-id-input" className="block text-xs font-medium text-white/70 mb-1.5">
               Organization Identifier (UUIDv4)
             </label>
             <div className="relative">
               <input
+                id="organization-id-input"
                 value={organizationIdDraft}
                 onChange={(event) => handleOrgChange(event.target.value)}
                 placeholder="00000000-0000-0000-0000-000000000000"

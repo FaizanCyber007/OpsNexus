@@ -14,18 +14,8 @@ const SEVERITY_CONFIG = {
   low: "border-blue-500/30 bg-blue-500/10 text-blue-300",
 };
 
-export function RiskBadge({ label, severity, className = "" }: RiskBadgeProps) {
-  // Infer severity if not explicitly provided
-  const lower = label.toLowerCase();
-  const resolvedSeverity =
-    severity ||
-    (lower.includes("critical") || lower.includes("breach") || lower.includes("severe")
-      ? "critical"
-      : lower.includes("high") || lower.includes("indemnity") || lower.includes("penalty")
-      ? "high"
-      : lower.includes("medium") || lower.includes("warning")
-      ? "medium"
-      : "low");
+export function RiskBadge({ label, severity = "low", className = "" }: RiskBadgeProps) {
+  const resolvedSeverity = severity || "low";
 
   const Icon =
     resolvedSeverity === "critical"

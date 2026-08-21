@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { ToastProvider } from "@/contexts/ToastContext";
+import { TenantProvider } from "@/contexts/TenantContext";
 import { ThreeBackground } from "@/components/ui/ThreeBackground";
 
 import "./globals.css";
@@ -35,7 +36,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-[#09090b] text-[#f4f4f5] relative selection:bg-indigo-500/30 selection:text-white" suppressHydrationWarning>
         <ThreeBackground />
         <div className="relative z-10 flex min-h-screen flex-col">
-          <ToastProvider>{children}</ToastProvider>
+          <TenantProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </TenantProvider>
         </div>
       </body>
     </html>

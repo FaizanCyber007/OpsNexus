@@ -8,6 +8,8 @@ and background tasks for SOC2 audit logging.
 from contextvars import ContextVar
 from typing import Any
 
+from django.conf import settings
+
 _current_user: ContextVar[Any] = ContextVar("current_user", default=None)
 _client_ip: ContextVar[str | None] = ContextVar("client_ip", default=None)
 
@@ -37,12 +39,12 @@ def reset_audit_context(tokens: tuple[Any, Any]):
 
 def _extract_client_ip(request: Any) -> str | None:
     """Extract client IP address handling proxies and direct connections."""
+    num_proxies = getattr(settings, "NUM_PROXIES", 0)
     x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded_for:
-        # First IP in comma-separated list is the client
-        ip = x_forwarded_for.split(",")[0].strip()
-        if ip:
-            return ip
+    if num_proxies > 0 and x_forwarded_for:
+        ips = [ip.strip() for ip in x_forwarded_for.split(",") if ip.strip()]
+        if len(ips) >= num_proxies:
+            return ips[-num_proxies]
     return request.META.get("REMOTE_ADDR")
 
 
@@ -67,3 +69,15 @@ class AuditLogContextMiddleware:
         finally:
             _current_user.reset(token_user)
             _client_ip.reset(token_ip)
+
+
+class AuditLogContextMixin:
+    """DRF View/ViewSet mixin to initialize audit user context after authentication."""
+
+    def initial(self, request, *args, **kwargs):
+        initial_func = getattr(super(), "initial", None)
+        if callable(initial_func):
+            initial_func(request, *args, **kwargs)
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_authenticated", False):
+            _current_user.set(user)

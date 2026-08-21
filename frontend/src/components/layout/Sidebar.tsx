@@ -12,6 +12,9 @@ import {
   Layers,
 } from "lucide-react";
 
+import { useTenant, DEMO_ORG_ID } from "@/contexts/TenantContext";
+import { cn } from "@/lib/utils";
+
 interface NavItem {
   label: string;
   href?: string;
@@ -46,6 +49,13 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { organizationId } = useTenant();
+
+  const tenantLabel = organizationId
+    ? organizationId === DEMO_ORG_ID
+      ? "Default Tenant"
+      : `Org: ${organizationId.slice(0, 8)}...`
+    : "No Organization Selected";
 
   return (
     <aside className="relative flex h-full w-64 flex-col border-r border-white/[0.08] bg-[#0c0c10]/90 backdrop-blur-2xl select-none z-20">
@@ -71,11 +81,16 @@ export function Sidebar() {
       {/* Workspace Indicator */}
       <div className="px-3 pt-3 pb-1">
         <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs text-white/70">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-medium text-white/90">Production Org</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <div
+              className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                organizationId ? "bg-emerald-400 animate-pulse" : "bg-white/20"
+              )}
+            />
+            <span className="font-medium text-white/90 truncate">{tenantLabel}</span>
           </div>
-          <Layers className="h-3.5 w-3.5 text-white/40" />
+          <Layers className="h-3.5 w-3.5 text-white/40 shrink-0" />
         </div>
       </div>
 

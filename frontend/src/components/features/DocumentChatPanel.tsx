@@ -228,7 +228,7 @@ export function DocumentChatPanel({ documentId }: DocumentChatPanelProps) {
               aria-checked={isArenaMode}
               onClick={() => setIsArenaMode((prev) => !prev)}
               className={cn(
-                "relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                "relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 isArenaMode ? "bg-indigo-600" : "bg-white/20"
               )}
             >
@@ -252,14 +252,14 @@ export function DocumentChatPanel({ documentId }: DocumentChatPanelProps) {
               <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.2 text-[10px] font-semibold text-amber-300 border border-amber-500/20">
                 ⚡ Dual Benchmark
               </span>
-              <span>Groq (Llama-3 70B) vs Gemini Flash</span>
+              <span>Groq vs Gemini</span>
             </>
           ) : (
             <>
               <span className="inline-flex items-center gap-1 rounded bg-indigo-500/10 px-1.5 py-0.2 text-[10px] font-semibold text-indigo-300 border border-indigo-500/20">
                 Single Model
               </span>
-              <span>Gemini Flash Standard Inference</span>
+              <span>Gemini Standard Inference</span>
             </>
           )}
         </div>
@@ -345,7 +345,7 @@ export function DocumentChatPanel({ documentId }: DocumentChatPanelProps) {
                                 <Zap className="h-3 w-3" />
                               </span>
                               <span className="text-xs font-semibold text-amber-200">
-                                Groq (Llama-3 70B)
+                                {msg.results?.groq?.model_name || "Groq"}
                               </span>
                             </div>
 
@@ -381,7 +381,7 @@ export function DocumentChatPanel({ documentId }: DocumentChatPanelProps) {
                                 <Sparkles className="h-3 w-3" />
                               </span>
                               <span className="text-xs font-semibold text-indigo-200">
-                                Gemini Flash
+                                {msg.results?.gemini?.model_name || "Gemini"}
                               </span>
                             </div>
 

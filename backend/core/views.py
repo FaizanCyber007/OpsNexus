@@ -1,10 +1,11 @@
-"""Core app views for OpsNexus."""
+import uuid
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
-from rest_framework import viewsets
+from rest_framework import exceptions, viewsets
 from rest_framework.permissions import IsAuthenticated
 
+from core.middleware import AuditLogContextMixin
 from core.models import AuditLog
 from core.permissions import IsOrganizationAdmin
 from core.serializers import AuditLogSerializer
@@ -18,6 +19,13 @@ from core.serializers import AuditLogSerializer
             "Only Organization Admins can view audit logs."
         ),
         parameters=[
+            OpenApiParameter(
+                name="organization",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter audit logs by Organization UUID (superuser only)",
+                required=False,
+            ),
             OpenApiParameter(
                 name="resource_type",
                 type=str,
@@ -45,7 +53,7 @@ from core.serializers import AuditLogSerializer
         },  # noqa: E501
     ),
 )
-class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+class AuditLogViewSet(AuditLogContextMixin, viewsets.ReadOnlyModelViewSet):
     """Read-only ViewSet for SOC2-compliant company audit logs."""
 
     serializer_class = AuditLogSerializer
@@ -60,6 +68,12 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         if user.is_superuser:
             org_id = self.request.query_params.get("organization")
             if org_id:
+                try:
+                    uuid.UUID(str(org_id))
+                except (ValueError, AttributeError, TypeError):
+                    raise exceptions.ValidationError(
+                        {"organization": "Invalid UUID format."}
+                    )
                 queryset = queryset.filter(organization_id=org_id)
         else:
             profile = getattr(user, "profile", None)

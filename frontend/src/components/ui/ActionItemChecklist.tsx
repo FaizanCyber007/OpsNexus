@@ -17,10 +17,16 @@ export function ActionItemChecklist({ items, className = "" }: ActionItemCheckli
     setCompleted((prev) => ({ ...prev, [index]: !prev[index] }));
   };
 
-  const copyItemText = (index: number, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIdx(index);
-    setTimeout(() => setCopiedIdx(null), 2000);
+  const copyItemText = async (index: number, text: string) => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        setCopiedIdx(index);
+        setTimeout(() => setCopiedIdx(null), 2000);
+      }
+    } catch {
+      // Gracefully handle clipboard write failure
+    }
   };
 
   return (
@@ -65,7 +71,8 @@ export function ActionItemChecklist({ items, className = "" }: ActionItemCheckli
               type="button"
               onClick={() => copyItemText(index, item)}
               title="Copy action item"
-              className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-white transition-opacity p-0.5"
+              aria-label="Copy action item"
+              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus:outline-none text-white/40 hover:text-white transition-opacity p-0.5"
             >
               {isCopied ? (
                 <CheckCheck className="h-3.5 w-3.5 text-emerald-400" />

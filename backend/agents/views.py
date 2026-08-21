@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from core.middleware import AuditLogContextMixin
 from .models import AgentRun
 from .serializers import ToolCallSerializer
 
@@ -44,7 +45,7 @@ from .serializers import ToolCallSerializer
         ],
     ),
 )
-class AgentRunViewSet(GenericViewSet):
+class AgentRunViewSet(AuditLogContextMixin, GenericViewSet):
     """ViewSet for inspecting agent execution runs and tool traces."""
 
     queryset = AgentRun.objects.filter(deleted_at__isnull=True).select_related(

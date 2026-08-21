@@ -74,7 +74,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
       initial={{ opacity: 0, y: 20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -10, scale: 0.9, transition: { duration: 0.2 } }}
-      role="alert"
+      role={toast.variant === "error" ? "alert" : "status"}
       className={cn(
         "relative flex flex-col overflow-hidden rounded-2xl border p-4 shadow-2xl backdrop-blur-xl transition-all",
         borderClass,

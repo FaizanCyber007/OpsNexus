@@ -54,7 +54,7 @@ def process_document_task(document_id: Any) -> None:
 
 
 def enqueue_document_processing(document_id: str | uuid.UUID) -> bool:
-    """Enqueue document processing task into Redis queue and execute pipeline."""
+    """Enqueue document processing task into Redis queue."""
     doc_id_str = str(document_id)
     payload = json.dumps(
         {
@@ -67,16 +67,28 @@ def enqueue_document_processing(document_id: str | uuid.UUID) -> bool:
         redis_client = get_redis_connection("default")
         redis_client.rpush(REDIS_DOCUMENT_QUEUE_KEY, payload)
         logger.info("Enqueued document processing task to Redis queue: %s", doc_id_str)
-    except Exception:
-        logger.warning(
-            "Redis queue push unavailable for document %s; executing directly",
-            doc_id_str,
-            exc_info=True,
-        )
-
-    try:
-        process_document_task(doc_id_str)
         return True
     except Exception:
-        logger.exception("Document processing failed for %s", doc_id_str)
+        logger.exception(
+            "Failed to enqueue document processing task to Redis queue: %s",
+            doc_id_str,
+        )
+        return False
+
+
+def process_next_document_task(timeout: int = 1) -> bool:
+    """Consume and execute a single document processing task from the Redis queue."""
+    try:
+        redis_client = get_redis_connection("default")
+        item = redis_client.blpop(REDIS_DOCUMENT_QUEUE_KEY, timeout=timeout)
+        if not item:
+            return False
+        _, payload_bytes = item
+        data = json.loads(payload_bytes)
+        document_id = data.get("document_id")
+        if document_id:
+            process_document_task(document_id)
+        return True
+    except Exception:
+        logger.exception("Error consuming document processing task from Redis queue")
         return False

@@ -122,7 +122,6 @@ class TestRateLimitingThrottling:
 class TestSecurityHeaders:
     def test_production_security_settings_configured(self):
         """Verify required Django security configuration settings."""
-        assert settings.SECURE_BROWSER_XSS_FILTER is True
         assert settings.SECURE_CONTENT_TYPE_NOSNIFF is True
         assert settings.X_FRAME_OPTIONS == "DENY"
         assert settings.CSRF_COOKIE_HTTPONLY is True
@@ -134,3 +133,38 @@ class TestSecurityHeaders:
 
         assert response.headers.get("X-Content-Type-Options") == "nosniff"
         assert response.headers.get("X-Frame-Options") == "DENY"
+
+
+class TestClientIPExtraction:
+    def test_extract_client_ip_without_proxies_uses_remote_addr(self, rf):
+        from core.middleware import _extract_client_ip
+
+        request = rf.get(
+            "/api/v1/documents/",
+            HTTP_X_FORWARDED_FOR="1.1.1.1, 2.2.2.2",
+            REMOTE_ADDR="3.3.3.3",
+        )
+        with patch.object(settings, "NUM_PROXIES", 0):
+            assert _extract_client_ip(request) == "3.3.3.3"
+
+    def test_extract_client_ip_with_one_trusted_proxy(self, rf):
+        from core.middleware import _extract_client_ip
+
+        request = rf.get(
+            "/api/v1/documents/",
+            HTTP_X_FORWARDED_FOR="1.1.1.1, 2.2.2.2",
+            REMOTE_ADDR="3.3.3.3",
+        )
+        with patch.object(settings, "NUM_PROXIES", 1):
+            assert _extract_client_ip(request) == "2.2.2.2"
+
+    def test_extract_client_ip_with_two_trusted_proxies(self, rf):
+        from core.middleware import _extract_client_ip
+
+        request = rf.get(
+            "/api/v1/documents/",
+            HTTP_X_FORWARDED_FOR="spoofed_client, real_client, proxy1",
+            REMOTE_ADDR="proxy2",
+        )
+        with patch.object(settings, "NUM_PROXIES", 2):
+            assert _extract_client_ip(request) == "real_client"
