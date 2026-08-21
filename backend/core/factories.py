@@ -65,5 +65,5 @@ class AuditLogFactory(DjangoModelFactory):
     organization = factory.SubFactory(OrganizationFactory)
     action = AuditLog.Action.CREATE
     resource_type = "Document"
-    resource_id = factory.LazyFunction(lambda: str(factory.Faker("uuid4")))
+    resource_id = factory.Faker("uuid4")
     ip_address = "127.0.0.1"

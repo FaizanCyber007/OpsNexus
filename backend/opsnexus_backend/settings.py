@@ -10,8 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import environ
+import sys
 from pathlib import Path
+
+import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -97,8 +99,18 @@ WSGI_APPLICATION = "opsnexus_backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+_is_testing = (
+    "pytest" in sys.modules
+    or "pytest" in sys.argv[0]
+    or (len(sys.argv) > 1 and sys.argv[1] == "test")
+)
+
 DATABASES = {
-    "default": env.db("DATABASE_URL", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+    "default": (
+        env.db("TEST_DATABASE_URL", default="sqlite:///:memory:")
+        if _is_testing
+        else env.db("DATABASE_URL", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+    )
 }
 
 
