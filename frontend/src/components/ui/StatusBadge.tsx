@@ -1,79 +1,85 @@
+import { CheckCircle2, Clock, Loader2, XCircle, AlertCircle } from "lucide-react";
 import type { Document } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-type BadgeStatus = Document["status"] | "error";
+export type BadgeStatus = Document["status"] | "error";
 
-const STATUS_CONFIG: Record<
-  BadgeStatus,
-  { label: string; badgeClass: string; dotClass: string; icon: "dot-pulse" | "check" | "cross" }
-> = {
+interface StatusConfig {
+  label: string;
+  badgeClass: string;
+  dotClass: string;
+  icon: typeof CheckCircle2;
+  animateIcon?: boolean;
+}
+
+const STATUS_CONFIG: Record<BadgeStatus, StatusConfig> = {
   pending: {
     label: "Pending",
-    badgeClass: "border-status-warning/30 bg-status-warning/10 text-status-warning",
-    dotClass: "bg-status-warning",
-    icon: "dot-pulse",
+    badgeClass: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+    dotClass: "bg-amber-400",
+    icon: Clock,
   },
   processing: {
     label: "Processing",
-    badgeClass: "border-status-warning/30 bg-status-warning/10 text-status-warning",
-    dotClass: "bg-status-warning",
-    icon: "dot-pulse",
+    badgeClass: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300 shadow-sm shadow-indigo-500/10",
+    dotClass: "bg-indigo-400",
+    icon: Loader2,
+    animateIcon: true,
   },
   completed: {
     label: "Completed",
-    badgeClass: "border-status-good/30 bg-status-good/10 text-status-good",
-    dotClass: "bg-status-good",
-    icon: "check",
+    badgeClass: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
+    dotClass: "bg-emerald-400",
+    icon: CheckCircle2,
   },
   failed: {
     label: "Failed",
-    badgeClass: "border-status-critical/30 bg-status-critical/10 text-status-critical",
-    dotClass: "bg-status-critical",
-    icon: "cross",
+    badgeClass: "border-rose-500/25 bg-rose-500/10 text-rose-300",
+    dotClass: "bg-rose-400",
+    icon: XCircle,
   },
   error: {
     label: "Error",
-    badgeClass: "border-status-critical/30 bg-status-critical/10 text-status-critical",
-    dotClass: "bg-status-critical",
-    icon: "cross",
+    badgeClass: "border-rose-500/25 bg-rose-500/10 text-rose-300",
+    dotClass: "bg-rose-400",
+    icon: AlertCircle,
   },
 };
 
 interface StatusBadgeProps {
   status: BadgeStatus;
+  size?: "sm" | "md";
+  className?: string;
+  showIcon?: boolean;
 }
 
-export function StatusBadge({ status }: StatusBadgeProps) {
-  const { label, badgeClass, dotClass, icon } = STATUS_CONFIG[status];
+export function StatusBadge({
+  status,
+  size = "md",
+  className = "",
+  showIcon = true,
+}: StatusBadgeProps) {
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const Icon = config.icon;
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClass}`}
+      className={cn(
+        "inline-flex items-center gap-1.5 font-medium rounded-full border backdrop-blur-md transition-all select-none",
+        size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs",
+        config.badgeClass,
+        className
+      )}
     >
-      {icon === "dot-pulse" && (
-        <span className={`h-1.5 w-1.5 animate-pulse rounded-full ${dotClass}`} />
+      {showIcon && (
+        <Icon
+          className={cn(
+            size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5",
+            config.animateIcon && "animate-spin"
+          )}
+        />
       )}
-      {icon === "check" && (
-        <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none">
-          <path
-            d="M3.5 8.5 6.5 11.5 12.5 4.5"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      )}
-      {icon === "cross" && (
-        <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none">
-          <path
-            d="M4 4 12 12M12 4 4 12"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-          />
-        </svg>
-      )}
-      {label}
+      {config.label}
     </span>
   );
 }

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
+import { FileText, AlertCircle, Sparkles } from "lucide-react";
 import { AgentTraceViewer } from "@/components/features/AgentTraceViewer";
 import { Meter } from "@/components/ui/Meter";
-import { Shimmer } from "@/components/ui/Shimmer";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/contexts/ToastContext";
 import { useDocumentPolling } from "@/hooks/useDocumentPolling";
@@ -17,21 +17,27 @@ interface AnswerDisplayProps {
   onStatusChange?: (status: Document["status"]) => void;
 }
 
-export function AnswerDisplay({ documentId, fileName, onStatusChange }: AnswerDisplayProps) {
+export function AnswerDisplay({
+  documentId,
+  fileName,
+  onStatusChange,
+}: AnswerDisplayProps) {
   const { showError } = useToast();
+
   const handleStatusChange = (status: Document["status"]) => {
     if (status === "failed") {
       showError(`AI processing failed for "${fileName}".`);
     }
     onStatusChange?.(status);
   };
+
   const { document, isPolling } = useDocumentPolling(documentId, handleStatusChange);
   const [answers, setAnswers] = useState<Answer[] | null>(null);
 
   useEffect(() => {
-    setAnswers(null);
     if (document?.status !== "completed") return;
     let cancelled = false;
+
     apiClient
       .get<Answer[]>(`/documents/${documentId}/answers/`)
       .then((data) => {
@@ -43,57 +49,74 @@ export function AnswerDisplay({ documentId, fileName, onStatusChange }: AnswerDi
           showError(`Couldn't load the answer for "${fileName}".`);
         }
       });
+
     return () => {
       cancelled = true;
     };
   }, [document?.status, documentId, fileName, showError]);
 
+  const isPending =
+    isPolling || document?.status === "pending" || document?.status === "processing";
+
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <span className="truncate text-sm font-medium text-white/90">{fileName}</span>
-        <StatusBadge status={document?.status ?? "pending"} />
+    <div className="rounded-2xl border border-white/[0.08] bg-[#111116]/90 p-5 shadow-xl backdrop-blur-xl transition-all">
+      {/* Header bar */}
+      <div className="mb-3.5 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 truncate">
+          <FileText className="h-4 w-4 text-indigo-400 shrink-0" />
+          <span className="truncate text-xs font-semibold text-white/90">{fileName}</span>
+        </div>
+        <StatusBadge status={document?.status ?? "pending"} size="sm" />
       </div>
 
+      {/* Failure message */}
       {document?.status === "failed" && (
-        <p className="text-sm text-status-critical">
-          Processing failed for this document.
-        </p>
+        <div className="mb-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>Processing failed for this document run.</span>
+        </div>
       )}
 
-      <div className="mb-4">
+      {/* Embedded Agent Trace */}
+      <div className="mb-3">
         <AgentTraceViewer
           agentRunId={document?.latest_agent_run_id ?? null}
           isTerminal={document?.status === "completed" || document?.status === "failed"}
         />
       </div>
 
-      {(isPolling || document?.status === "pending" || document?.status === "processing") && (
-        <div className="flex flex-col gap-2">
-          <Shimmer className="h-3.5 w-2/3" />
-          <Shimmer className="h-3.5 w-full" />
-          <Shimmer className="h-3.5 w-5/6" />
+      {/* Pending Shimmer Loading State */}
+      {isPending && (
+        <div className="space-y-2 py-2">
+          <div className="flex items-center gap-1.5 text-xs text-amber-300">
+            <Sparkles className="h-3.5 w-3.5 animate-spin text-amber-400" />
+            <span>Autonomous agent workflow in progress…</span>
+          </div>
+          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-5/6" />
         </div>
       )}
 
+      {/* Completed Results */}
       {document?.status === "completed" && answers === null && (
-        <div className="flex flex-col gap-2">
-          <Shimmer className="h-3.5 w-2/3" />
-          <Shimmer className="h-3.5 w-full" />
+        <div className="space-y-2 py-2">
+          <Skeleton className="h-3 w-2/3" />
+          <Skeleton className="h-3 w-full" />
         </div>
       )}
 
       {document?.status === "completed" && answers !== null && answers.length === 0 && (
-        <p className="text-sm text-white/50">No answer produced for this document.</p>
+        <p className="text-xs text-white/40 italic">No answer payload returned by worker agent.</p>
       )}
 
       {document?.status === "completed" && answers !== null && answers.length > 0 && (
-        <div className="flex flex-col gap-4">
+        <div className="space-y-3 pt-2">
           {answers.map((answer) => (
-            <div key={answer.id} className="flex flex-col gap-3">
-              <p className="text-sm leading-relaxed text-white/90">{answer.content}</p>
+            <div key={answer.id} className="space-y-3 rounded-xl bg-white/[0.02] p-3 border border-white/[0.04]">
+              <p className="text-xs leading-relaxed text-white/90">{answer.content}</p>
               {answer.confidence_score !== null && (
-                <Meter label="Confidence" value={answer.confidence_score} />
+                <Meter label="Resolution Confidence" value={answer.confidence_score} />
               )}
             </div>
           ))}

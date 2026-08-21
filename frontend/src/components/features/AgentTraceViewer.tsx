@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
+import {
+  Terminal,
+  ChevronDown,
+  ChevronUp,
+  Database,
+  Route,
+  Network,
+  Cpu,
+  CheckCircle2,
+  Copy,
+  CheckCheck,
+} from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { apiClient } from "@/lib/apiClient";
 import type { ToolCall } from "@/lib/types";
@@ -9,16 +20,24 @@ import type { ToolCall } from "@/lib/types";
 const POLL_INTERVAL_MS = 1500;
 const MAX_POLL_BACKOFF_MS = 15000;
 
-const STEP_LABELS: Record<string, string> = {
-  langgraph_supervisor_classify: "Supervisor classified the document",
-  mock_classifier: "Deterministic router classified the document",
-  search_company_knowledge: "Sales Worker searched company knowledge (ChromaDB)",
-  get_internal_pricing_policy: "Sales Worker queried pricing policy (MCP)",
+const STEP_LABELS: Record<string, { label: string; icon: typeof Database }> = {
+  langgraph_supervisor_classify: {
+    label: "Supervisor classified the document",
+    icon: Route,
+  },
+  mock_classifier: {
+    label: "Deterministic router classified the document",
+    icon: Network,
+  },
+  search_company_knowledge: {
+    label: "Sales Worker searched company knowledge (ChromaDB)",
+    icon: Database,
+  },
+  get_internal_pricing_policy: {
+    label: "Sales Worker queried pricing policy (MCP Host)",
+    icon: Cpu,
+  },
 };
-
-function humanizeToolName(toolName: string): string {
-  return STEP_LABELS[toolName] ?? toolName.replace(/_/g, " ");
-}
 
 function formatJson(value: unknown): string {
   if (value === null || value === undefined) return "—";
@@ -33,51 +52,82 @@ interface TraceStepProps {
 
 function TraceStep({ step, index, isLast }: TraceStepProps) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const meta = STEP_LABELS[step.tool_name] || {
+    label: step.tool_name.replace(/_/g, " "),
+    icon: Terminal,
+  };
+  const StepIcon = meta.icon;
+
+  const copyOutput = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(formatJson(step.tool_output));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <li className="relative flex gap-3 pb-4 last:pb-0">
+    <li className="relative flex gap-3 pb-3 last:pb-0">
+      {/* Animated Connector Line */}
       {!isLast && (
-        <span className="absolute top-2.5 left-[5px] h-full w-px bg-white/10" />
+        <span className="absolute top-3 left-[11px] h-full w-px bg-white/10" />
       )}
-      <span className="relative z-10 mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-gradient-to-r from-indigo-400 to-violet-400" />
-      <div className="flex-1">
+
+      {/* Step Icon Badge */}
+      <div className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-indigo-500/30 bg-[#121218] text-indigo-300 shadow-sm">
+        <StepIcon className="h-3 w-3" />
+      </div>
+
+      {/* Step Details */}
+      <div className="flex-1 min-w-0">
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
-          className="flex w-full items-start justify-between gap-2 text-left"
+          className="flex w-full items-center justify-between gap-2 text-left rounded-lg p-1 hover:bg-white/[0.03] transition-colors"
         >
-          <span className="text-sm text-white/90">
-            <span className="text-white/30">{index + 1}.</span> {humanizeToolName(step.tool_name)}
-          </span>
-          <svg
-            viewBox="0 0 16 16"
-            className={`mt-1 h-3 w-3 shrink-0 text-white/40 transition-transform ${expanded ? "rotate-180" : ""}`}
-            fill="none"
-          >
-            <path
-              d="M4 6l4 4 4-4"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="font-mono text-[10px] text-white/30">0{index + 1}.</span>
+            <span className="text-xs font-medium text-white/90 truncate">{meta.label}</span>
+          </div>
+
+          <div className="flex items-center gap-1 text-white/40 shrink-0">
+            <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+            {expanded ? (
+              <ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            )}
+          </div>
         </button>
 
         {expanded && (
-          <div className="mt-2 flex flex-col gap-2 rounded-lg border border-white/10 bg-black/20 p-3 text-xs">
-            <div>
-              <p className="mb-1 font-medium text-white/40">Input</p>
-              <pre className="overflow-x-auto whitespace-pre-wrap text-white/70">
-                {formatJson(step.tool_input)}
-              </pre>
+          <div className="mt-2 space-y-2 rounded-xl border border-white/[0.08] bg-black/40 p-3 text-[11px]">
+            <div className="flex items-center justify-between border-b border-white/5 pb-1 text-white/40">
+              <span className="font-mono text-[10px] uppercase tracking-wider">Input Payload</span>
             </div>
-            <div>
-              <p className="mb-1 font-medium text-white/40">Output</p>
-              <pre className="overflow-x-auto whitespace-pre-wrap text-white/70">
-                {formatJson(step.tool_output)}
-              </pre>
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-white/70 bg-white/[0.02] p-2 rounded-lg border border-white/[0.03]">
+              {formatJson(step.tool_input)}
+            </pre>
+
+            <div className="flex items-center justify-between border-b border-white/5 pb-1 pt-1 text-white/40">
+              <span className="font-mono text-[10px] uppercase tracking-wider">Execution Output</span>
+              <button
+                type="button"
+                onClick={copyOutput}
+                className="flex items-center gap-1 hover:text-white transition-colors"
+              >
+                {copied ? (
+                  <CheckCheck className="h-3 w-3 text-emerald-400" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+                <span>Copy</span>
+              </button>
             </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-white/80 bg-white/[0.02] p-2 rounded-lg border border-white/[0.03]">
+              {formatJson(step.tool_output)}
+            </pre>
           </div>
         )}
       </div>
@@ -96,7 +146,6 @@ export function AgentTraceViewer({ agentRunId, isTerminal }: AgentTraceViewerPro
   const { showError } = useToast();
 
   useEffect(() => {
-    setSteps([]);
     if (!agentRunId) return;
 
     let cancelled = false;
@@ -106,7 +155,7 @@ export function AgentTraceViewer({ agentRunId, isTerminal }: AgentTraceViewerPro
     async function poll() {
       try {
         const result = await apiClient.get<ToolCall[]>(
-          `/agent-runs/${agentRunId}/tool-calls/`,
+          `/agent-runs/${agentRunId}/tool-calls/`
         );
         if (cancelled) return;
         setSteps(result);
@@ -141,41 +190,45 @@ export function AgentTraceViewer({ agentRunId, isTerminal }: AgentTraceViewerPro
   const isThinking = !isTerminal && steps.length === 0;
 
   return (
-    <div className="rounded-xl border border-white/10 bg-gradient-to-b from-indigo-500/[0.04] to-transparent">
+    <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#121217]/80 backdrop-blur-md">
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-3"
+        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 hover:bg-white/[0.02] transition-colors"
       >
-        <span className="flex items-center gap-2 text-sm font-medium text-white/80">
-          Agent Thought Process
+        <div className="flex items-center gap-2">
+          <Terminal className="h-3.5 w-3.5 text-indigo-400" />
+          <span className="text-xs font-semibold text-white/90">Agent Workflow Trace</span>
           {isThinking && (
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-warning" />
+            <span className="flex items-center gap-1 text-[10px] text-amber-300 font-mono">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+              <span>Synthesizing...</span>
+            </span>
           )}
-        </span>
-        <svg
-          viewBox="0 0 16 16"
-          className={`h-3.5 w-3.5 text-white/40 transition-transform ${isOpen ? "rotate-180" : ""}`}
-          fill="none"
-        >
-          <path
-            d="M4 6l4 4 4-4"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+          {steps.length > 0 && (
+            <span className="rounded-full bg-white/[0.06] px-1.5 py-0.2 text-[10px] font-mono text-white/50 border border-white/5">
+              {steps.length} {steps.length === 1 ? "step" : "steps"}
+            </span>
+          )}
+        </div>
+
+        {isOpen ? (
+          <ChevronUp className="h-3.5 w-3.5 text-white/40" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 text-white/40" />
+        )}
       </button>
 
       {isOpen && (
-        <div className="border-t border-white/10 px-4 py-3">
+        <div className="border-t border-white/[0.06] p-3.5">
           {isThinking && (
-            <p className="text-xs text-white/40">Agent is thinking…</p>
+            <p className="text-xs text-white/40 animate-pulse font-mono">
+              Agents executing reasoning loop across tools…
+            </p>
           )}
 
           {steps.length > 0 && (
-            <ul>
+            <ul className="space-y-1">
               {steps.map((step, index) => (
                 <TraceStep
                   key={step.id}
@@ -188,7 +241,7 @@ export function AgentTraceViewer({ agentRunId, isTerminal }: AgentTraceViewerPro
           )}
 
           {!isThinking && steps.length === 0 && (
-            <p className="text-xs text-white/40">No trace steps recorded.</p>
+            <p className="text-xs text-white/40">No tool trace steps recorded for this run.</p>
           )}
         </div>
       )}

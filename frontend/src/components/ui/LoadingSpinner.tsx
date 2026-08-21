@@ -1,7 +1,11 @@
-const SIZE_CLASSES: Record<"sm" | "md" | "lg", string> = {
-  sm: "h-4 w-4 border-2",
-  md: "h-6 w-6 border-2",
-  lg: "h-10 w-10 border-4",
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const SIZE_CLASSES = {
+  xs: "h-3.5 w-3.5",
+  sm: "h-4 w-4",
+  md: "h-5 w-5",
+  lg: "h-7 w-7",
 };
 
 interface LoadingSpinnerProps {
@@ -11,10 +15,10 @@ interface LoadingSpinnerProps {
 
 export function LoadingSpinner({ size = "md", className = "" }: LoadingSpinnerProps) {
   return (
-    <div
+    <Loader2
       role="status"
       aria-label="Loading"
-      className={`animate-spin rounded-full border-white/20 border-t-indigo-400 ${SIZE_CLASSES[size]} ${className}`}
+      className={cn("animate-spin text-indigo-400 shrink-0", SIZE_CLASSES[size], className)}
     />
   );
 }

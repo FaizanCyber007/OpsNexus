@@ -775,3 +775,57 @@ Goal: Optimize database queries, implement caching, and generate the OpenAPI spe
 Run `pytest` to ensure caching didn't break functionality. Commit using `git commit -m "perf: optimize db queries, add redis caching, and generate OpenAPI specs"`.
 ```
 
+---
+
+## Prompt 20
+
+```
+[SYSTEM CONTEXT]
+You are the Lead Security & DevOps Architect for "OpsNexus".
+Stack: Django 5, DRF, PostgreSQL. (Linter: `black` and `flake8`).
+Goal: Implement production hardening, rate-limiting, and SOC2-compliant audit logging. (Do not implement Week 8 deployment tasks yet).
+
+[YOUR TASK: ENTERPRISE SECURITY & OBSERVABILITY]
+1. API Rate Limiting (Throttling):
+   - We are using free AI APIs (Groq/Gemini). We must protect our endpoints from abuse.
+   - Configure DRF native throttling (`AnonRateThrottle`, `UserRateThrottle`) in `settings.py`.
+   - Apply stricter custom throttling (e.g., max 5 requests per minute) specifically to the `/documents/` upload and `/chat/` endpoints to protect the LangGraph execution layer.
+2. Django Security Headers:
+   - Configure production security settings in `settings.py`: `SECURE_BROWSER_XSS_FILTER`, `SECURE_CONTENT_TYPE_NOSNIFF`, `X_FRAME_OPTIONS`, and `CSRF_COOKIE_HTTPONLY`.
+3. SOC2 Audit Trail (Observability):
+   - B2B platforms require audit logs. Create an `AuditLog` model in the `core` app (Fields: `user_id`, `action`, `resource_type`, `resource_id`, `timestamp`, `ip_address`).
+   - Implement a Django signal or middleware that automatically creates an `AuditLog` record whenever an Organization Admin creates, updates, or deletes a `HealthRule`, `Playbook`, or `Document`.
+   - Expose a read-only `GET /api/v1/audit-logs/` endpoint for Organization Admins to view their company's history.
+
+[EXECUTION CONSTRAINTS]
+Run `black .` and `flake8`. Write a unit test verifying that a 429 Too Many Requests status code is returned when the throttle limit is exceeded. Commit using `git commit -m "feat: implement API throttling, security headers, and SOC2 audit logging"`.
+
+---
+
+## Prompt 21
+
+```
+[SYSTEM CONTEXT]
+You are a Principal UI/UX Designer and Frontend Architect for "OpsNexus".
+Stack: Next.js 14, Tailwind CSS, Framer Motion, TypeScript, Lucide Icons.
+Goal: Completely overhaul the UI/UX to match top-tier 2026 B2B SaaS platforms. 
+
+[YOUR TASK: PREMIUM UI/UX OVERHAUL & STATE MANAGEMENT]
+1. Design Research & Benchmarking:
+   - Search the web for the latest UI/UX design principles used by elite developer and B2B tools (e.g., Linear, Vercel, Stripe, Supabase). 
+   - AVOID generic "AI-generated" designs (no massive blue buttons, no flat gray backgrounds, no excessive padding that wastes screen real estate).
+2. Global Theme Redesign:
+   - Implement a deeply premium Dark Mode aesthetic. Backgrounds should be near-black (e.g., `#0A0A0A` or `#09090B`). Use subtle 1px borders (`border-white/10`) for cards and tables.
+   - Use Glassmorphism (`backdrop-blur-md`, `bg-black/50`) for sticky headers, modals, and dropdowns.
+   - Standardize typography using a sleek, modern sans-serif font (like Inter or Geist). Ensure high data density for tables (smaller text, compact padding) so RevOps users can see a lot of data at once.
+3. Advanced State Management (Rubric Requirement):
+   - Empty States: Redesign all empty tables/dashboards. Instead of a blank screen, create beautiful "Empty State" illustrations or dashed-border dropzones with clear Call-to-Action buttons (e.g., "No Health Rules found. Click here to generate your first rule using AI.").
+   - Loading States: Strip out basic CSS spinners. Implement highly polished Shimmer/Skeleton loaders that match the exact shape of the data being fetched. 
+   - Error States: Redesign error boundaries and Toast notifications. They should be sleek, slide in via Framer Motion, and provide actionable fixes (not just raw API error text).
+4. Micro-Interactions & 3D Polish:
+   - Add subtle Framer Motion hover effects to buttons and table rows (e.g., `scale: 0.99` on click, slight background brightening on hover).
+   - Ensure the `@react-three/fiber` background element on the login/landing page blends seamlessly with this new dark aesthetic, acting as a subtle, high-end visual anchor.
+
+[EXECUTION CONSTRAINTS]
+Scan all components in `src/components/`. Refactor them to use a unified Tailwind config (consider setting up specific semantic colors in `tailwind.config.ts` like `background`, `border`, `muted`, `accent`). Run `npm run lint`. 
+Commit using `git commit -m "style: overhaul UI/UX to premium enterprise B2B aesthetic with advanced state management"`.

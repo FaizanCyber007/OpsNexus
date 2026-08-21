@@ -1,21 +1,49 @@
+import { AlertTriangle, AlertCircle, ShieldAlert } from "lucide-react";
+import { cn } from "@/lib/utils";
+
 interface RiskBadgeProps {
   label: string;
+  severity?: "critical" | "high" | "medium" | "low";
+  className?: string;
 }
 
-export function RiskBadge({ label }: RiskBadgeProps) {
+const SEVERITY_CONFIG = {
+  critical: "border-rose-500/30 bg-rose-500/10 text-rose-300",
+  high: "border-orange-500/30 bg-orange-500/10 text-orange-300",
+  medium: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  low: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+};
+
+export function RiskBadge({ label, severity, className = "" }: RiskBadgeProps) {
+  // Infer severity if not explicitly provided
+  const lower = label.toLowerCase();
+  const resolvedSeverity =
+    severity ||
+    (lower.includes("critical") || lower.includes("breach") || lower.includes("severe")
+      ? "critical"
+      : lower.includes("high") || lower.includes("indemnity") || lower.includes("penalty")
+      ? "high"
+      : lower.includes("medium") || lower.includes("warning")
+      ? "medium"
+      : "low");
+
+  const Icon =
+    resolvedSeverity === "critical"
+      ? ShieldAlert
+      : resolvedSeverity === "high"
+      ? AlertTriangle
+      : AlertCircle;
+
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-status-critical/30 bg-status-critical/10 px-2.5 py-1 text-xs font-medium text-status-critical">
-      <svg viewBox="0 0 16 16" className="h-3 w-3 shrink-0" fill="none">
-        <path
-          d="M8 1.5 15 13.5H1L8 1.5Z"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinejoin="round"
-        />
-        <path d="M8 6.5v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-        <circle cx="8" cy="11.2" r="0.6" fill="currentColor" />
-      </svg>
-      {label}
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium backdrop-blur-md transition-colors select-none",
+        SEVERITY_CONFIG[resolvedSeverity],
+        className
+      )}
+    >
+      <Icon className="h-3 w-3 shrink-0" />
+      <span>{label}</span>
     </span>
   );
 }
