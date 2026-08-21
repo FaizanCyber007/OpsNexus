@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from agents.models import AgentProfile, AgentRun, Answer, ToolCall
 from documents.models import Document
-from memory.vector_client import extract_text
+from memory.vector_client import extract_text_from_fieldfile
 from orchestration.graph import SalesWorkerError, graph
 from orchestration.model_client import (
     SUPERVISOR_MODEL_NAME,
@@ -40,7 +40,9 @@ async def trigger_agent_run(document_id) -> None:
 
     document_text = ""
     if document.file:
-        document_text = await asyncio.to_thread(extract_text, document.file.path)
+        document_text = await asyncio.to_thread(
+            extract_text_from_fieldfile, document.file
+        )
 
     agent_profile, _ = await AgentProfile.objects.aget_or_create(
         name=AGENT_PROFILE_NAME,

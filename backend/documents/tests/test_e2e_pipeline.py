@@ -287,9 +287,9 @@ class TestFullPipelineHttpE2E:
         assert gemini_res["status"] == "success"
         assert isinstance(gemini_res["execution_time_ms"], int)
 
-        assert arena_data["faster_model"] in ("groq", "gemini")
-        assert isinstance(arena_data["time_diff_ms"], int)
-        assert arena_data["time_diff_ms"] >= 0
+        # In simulated mode (no API keys configured in test), faster_model and time_diff_ms are None
+        assert arena_data["faster_model"] is None
+        assert arena_data["time_diff_ms"] is None
 
         # -------------------------------------------------------------
         # Step 6: Test Semantic Redis Cache Hit for Chat
@@ -442,9 +442,14 @@ class TestFullPipelineHttpE2E:
         assert str(doc_id) in doc_ids_before
 
         # Execute Soft Delete via DELETE endpoint
-        delete_res = api_client.delete(f"/api/documents/{doc_id}/")
+        with (
+            patch("django.db.transaction.on_commit", side_effect=lambda func: func()),
+            patch("memory.vector_client.ChromaDBClient") as MockChroma,
+        ):
+            delete_res = api_client.delete(f"/api/documents/{doc_id}/")
 
         assert delete_res.status_code == 204
+        MockChroma.return_value.delete_by_document_id.assert_called_once_with(str(doc_id))
 
         # Verify soft delete in DB
         doc.refresh_from_db()

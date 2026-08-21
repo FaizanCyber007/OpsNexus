@@ -51,7 +51,7 @@ export interface ToolCall {
 export interface DocumentChunk {
   text: string;
   metadata?: Record<string, unknown>;
-  distance?: number;
+  distance?: number | null;
 }
 
 export interface ModelChatResult {
@@ -75,7 +75,7 @@ export interface DocumentChatResponse {
   };
   result?: ModelChatResult;
   faster_model?: "groq" | "gemini" | string | null;
-  time_diff_ms?: number;
+  time_diff_ms?: number | null;
 }
 
 export interface ChatMessage {
@@ -90,7 +90,7 @@ export interface ChatMessage {
   };
   result?: ModelChatResult;
   faster_model?: string | null;
-  time_diff_ms?: number;
+  time_diff_ms?: number | null;
   timestamp: string;
   isPending?: boolean;
 }

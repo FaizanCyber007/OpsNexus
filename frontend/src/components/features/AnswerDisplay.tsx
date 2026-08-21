@@ -29,14 +29,23 @@ export function AnswerDisplay({ documentId, fileName, onStatusChange }: AnswerDi
   const [answers, setAnswers] = useState<Answer[] | null>(null);
 
   useEffect(() => {
+    setAnswers(null);
     if (document?.status !== "completed") return;
+    let cancelled = false;
     apiClient
       .get<Answer[]>(`/documents/${documentId}/answers/`)
-      .then(setAnswers)
+      .then((data) => {
+        if (!cancelled) setAnswers(data);
+      })
       .catch(() => {
-        setAnswers([]);
-        showError(`Couldn't load the answer for "${fileName}".`);
+        if (!cancelled) {
+          setAnswers([]);
+          showError(`Couldn't load the answer for "${fileName}".`);
+        }
       });
+    return () => {
+      cancelled = true;
+    };
   }, [document?.status, documentId, fileName, showError]);
 
   return (

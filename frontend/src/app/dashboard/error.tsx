@@ -7,10 +7,10 @@ import { Card } from "@/components/ui/Card";
 
 export default function DashboardError({
   error,
-  retry,
+  reset,
 }: {
   error: Error & { digest?: string };
-  retry: () => void;
+  reset: () => void;
 }) {
   useEffect(() => {
     console.error(error);
@@ -34,7 +34,7 @@ export default function DashboardError({
         <p className="text-sm text-white/50">
           The dashboard hit an unexpected error. You can try again, or reload the page.
         </p>
-        <Button onClick={() => retry()}>Try again</Button>
+        <Button onClick={() => reset()}>Try again</Button>
       </Card>
     </div>
   );

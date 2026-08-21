@@ -25,6 +25,8 @@ export function useDocumentPolling(
   });
 
   useEffect(() => {
+    setDocument(null);
+    setIsPolling(true);
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout>;
     let lastStatus: Document["status"] | null = null;

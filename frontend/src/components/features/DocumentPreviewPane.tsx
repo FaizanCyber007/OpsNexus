@@ -27,6 +27,7 @@ export function DocumentPreviewPane({ fileUrl, fileName }: DocumentPreviewPanePr
           <iframe
             src={fileUrl}
             title={fileName}
+            sandbox=""
             className="h-full min-h-[22rem] w-full bg-white/95"
           />
         ) : (

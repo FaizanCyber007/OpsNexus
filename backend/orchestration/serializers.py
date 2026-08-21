@@ -21,6 +21,11 @@ class DocumentChatRequestSerializer(serializers.Serializer):
     question = serializers.CharField(
         required=True,
         allow_blank=False,
+        max_length=2000,
+        error_messages={
+            "required": "The 'question' field is required.",
+            "blank": "The 'question' field cannot be blank.",
+        },
         help_text="The question or prompt to ask about the specified document.",
     )
     compare = serializers.BooleanField(
@@ -108,5 +113,6 @@ class DocumentChatResponseSerializer(serializers.Serializer):
     )
     time_diff_ms = serializers.IntegerField(
         required=False,
+        allow_null=True,
         help_text="Difference in execution time between providers in milliseconds.",
     )

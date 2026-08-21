@@ -35,6 +35,20 @@ class TestDocumentVectorCleanupSignals:
         )
         assert not PendingVectorCleanup.objects.filter(document_id=document_id).exists()
 
+    def test_hard_delete_deletes_file_from_storage_on_commit(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        upload = SimpleUploadedFile("delete_me.txt", b"temporary stored content")
+        document = DocumentFactory(file=upload)
+        file_name = document.file.name
+        storage = document.file.storage
+        assert storage.exists(file_name)
+
+        with _immediate_commit(), patch("memory.vector_client.ChromaDBClient"):
+            document.delete()
+
+        assert not storage.exists(file_name)
+
     def test_soft_delete_triggers_chroma_cleanup(self):
         document = DocumentFactory()
 

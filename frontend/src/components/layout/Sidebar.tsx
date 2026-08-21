@@ -1,10 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 interface NavItem {
   label: string;
   href?: string;
-  active?: boolean;
   icon: ReactNode;
 }
 
@@ -12,7 +14,6 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
-    active: true,
     icon: (
       <path
         d="M3 3h7v7H3V3Zm0 11h7v7H3v-7Zm11-11h7v7h-7V3Zm0 11h7v7h-7v-7Z"
@@ -57,9 +58,11 @@ const NAV_ITEMS: NavItem[] = [
       </>
     ),
   },
-] as const;
+];
 
 export function Sidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="flex h-full w-60 flex-col border-r border-white/10 bg-white/5 backdrop-blur-xl">
       <div className="flex items-center gap-2 px-5 py-5">
@@ -81,14 +84,24 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-1 px-3">
-        {NAV_ITEMS.map((item) =>
-          item.active && item.href ? (
+        {NAV_ITEMS.map((item) => {
+          const isActive =
+            Boolean(item.href) &&
+            (pathname === item.href ||
+              (item.href !== "/" && pathname.startsWith(item.href ?? "")));
+
+          return isActive && item.href ? (
             <Link
               key={item.label}
               href={item.href}
               className="flex items-center gap-3 rounded-lg bg-gradient-to-r from-indigo-500/20 to-violet-500/20 px-3 py-2 text-sm font-medium text-white ring-1 ring-inset ring-white/10"
             >
-              <svg viewBox="0 0 24 24" className="h-4 w-4 text-indigo-300" fill="none" stroke="currentColor">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4 text-indigo-300"
+                fill="none"
+                stroke="currentColor"
+              >
                 {item.icon}
               </svg>
               {item.label}
@@ -106,8 +119,8 @@ export function Sidebar() {
                 Soon
               </span>
             </div>
-          ),
-        )}
+          );
+        })}
       </nav>
 
       <div className="mt-auto border-t border-white/10 px-5 py-4">

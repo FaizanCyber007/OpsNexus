@@ -79,9 +79,7 @@ def _apply_retry_policy(llm):
 
     ``with_retry()`` is available on every ``Runnable`` subclass and is the
     idiomatic way to attach tenacity retries in LangChain without breaking
-    Pydantic v2's strict ``__setattr__``.  The returned object is still a
-    full ``Runnable``, so ``.with_structured_output()``, ``.bind_tools()``,
-    and ``.with_fallbacks()`` all continue to work as expected.
+    Pydantic v2's strict ``__setattr__``.
 
     Retry policy:
     - Retries on: ``groq.RateLimitError``, ``groq.APIStatusError`` (503)
@@ -92,7 +90,8 @@ def _apply_retry_policy(llm):
     return llm.with_retry(
         retry_if_exception_type=_get_retryable_exceptions(),
         stop_after_attempt=LLM_RETRY_ATTEMPTS,
-        wait_exponential_jitter=False,
+        wait_exponential_jitter=True,
+        exponential_jitter_params={"initial": 2.0, "max": 10.0},
     )
 
 
@@ -104,11 +103,16 @@ def _apply_retry_policy(llm):
 class LLMFactory:
     """Centralized point for obtaining the LLM client each agent role uses."""
 
+    @staticmethod
+    def apply_retry_policy(runnable):
+        """Public helper to wrap any Runnable with the project's standard retry policy."""
+        return _apply_retry_policy(runnable)
+
     def get_supervisor_llm(self):
         """Return a configured Gemini client for Supervisor classification.
 
         The returned Runnable wraps ``ChatGoogleGenerativeAI`` with the
-        standard tenacity retry policy (see module docstring).  Callers may
+        standard tenacity retry policy (see module docstring). Callers may
         still chain ``.with_structured_output()`` on the result because
         ``with_retry()`` preserves all Runnable method bindings.
         """

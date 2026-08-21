@@ -4,9 +4,23 @@ from rest_framework.test import APIClient
 from agents.factories import AgentRunFactory, ToolCallFactory
 
 
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+
 @pytest.fixture
-def api_client():
-    return APIClient()
+def auth_user(db):
+    return User.objects.create_superuser(
+        username="admin", password="password", email="admin@example.com"
+    )
+
+
+@pytest.fixture
+def api_client(auth_user):
+    client = APIClient()
+    client.force_authenticate(user=auth_user)
+    return client
 
 
 @pytest.mark.django_db

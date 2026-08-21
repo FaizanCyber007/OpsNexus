@@ -165,8 +165,8 @@ Execute sequentially and commit after each step.
      c. Model selection rationale (Free tier optimization using Groq and Gemini).
    - Action: `git commit -m "docs: generate architectural readme with model selection rationale"`
 
-3. Prompt Logging (`prompts.md`):
-   - Ensure `prompts.md` exists in the root. 
+3. Prompt Logging (`prompt.md`):
+   - Ensure `prompt.md` exists in the root. 
    - Add a detailed entry for "Phase 3: Scaffold & Architecture". Log that we used a modular, multi-app Django structure and a strictly typed Next.js component hierarchy to prepare for Agentic integration.
    - Action: `git commit -m "docs: update prompts log for week 5 scaffolding"`
 
@@ -239,7 +239,7 @@ Execute sequentially and commit after each phase.
    - Action: `git add .` && `git commit -m "chore(infra): add docker-compose for local postgres and redis scaffolding"`
 
 4. Final Rubric Verification:
-   - Append to `prompts.md`. Note that the Tool Registry, Model Client, and Memory layers were explicitly modularized to separate concerns before Week 6 feature development.
+   - Append to `prompt.md`. Note that the Tool Registry, Model Client, and Memory layers were explicitly modularized to separate concerns before Week 6 feature development.
    - Action: `git commit -m "docs: finalize week 5 stub requirements in prompt logs"`
 
 [EXECUTION CONSTRAINTS]
@@ -302,14 +302,15 @@ per-organization `Chroma` collection (`langchain-chroma`, persisted under
 `backend/chroma_data/`) embedded locally via `HuggingFaceEmbeddings`
 (`all-MiniLM-L6-v2`, `langchain-huggingface`) — no paid API calls. A new
 `ingest_document()` function extracts text (`PyPDFLoader` for `.pdf`,
-`Docx2txtLoader` for `.docx`, a plain UTF-8 read for other text-bearing files,
-skipping undecodable/binary files with a logged warning rather than failing the
-upload — confirmed with the user that ingestion should cover any file with
-extractable text, not just PDFs), splits it with `RecursiveCharacterTextSplitter`,
-and upserts the chunks into a collection named `org_<organization_id>`. This runs
-in the existing background thread in `documents/views.py`, wrapped in its own
-try/except so an ingestion failure never blocks the existing mock `AgentRun`
-pipeline, and executes before `trigger_mock_agent_run` as specified.
+`Docx2txtLoader` for `.docx`, a plain UTF-8 read for `.txt`, `.md`, `.csv`, `.log`
+and other text-bearing files, skipping undecodable/binary files with a logged
+warning rather than failing the upload — confirmed with the user that ingestion
+should cover any file with extractable text, not just PDFs), splits it with
+`RecursiveCharacterTextSplitter`, and upserts the chunks into a collection named
+`org_<organization_id>`. This runs in the existing background thread in
+`documents/views.py`, wrapped in its own try/except so an ingestion failure never
+blocks the existing mock `AgentRun` pipeline, and executes before
+`trigger_mock_agent_run` as specified.
 
 ---
 
@@ -467,7 +468,7 @@ You are the QA Lead for "OpsNexus". We are finalizing Week 6.
 2. Error Handling Audit:
    - Scan the `agent_runner.py`. Ensure `try/except` blocks wrap all LLM invocations. If Groq times out, the `Document` status must be updated to "failed", and a clean error saved to the database.
 3. Prompt Log Update:
-   - Append to `prompts.md`. Add a "Week 6: Core Feature Development" section. Log the implementation of LangGraph, the ChromaDB ingestion pipeline, and the Pytest suite.
+   - Append to `prompt.md`. Add a "Week 6: Core Feature Development" section. Log the implementation of LangGraph, the ChromaDB ingestion pipeline, and the Pytest suite.
 
 [EXECUTION CONSTRAINTS]
 Run `pytest --cov=orchestration --cov=documents` (or standard `pytest` if coverage plugin is missing) to ensure tests pass. Run `black .` and `flake8`.
@@ -620,7 +621,7 @@ You are the UX/UI Architect for "OpsNexus".
    - Use premium UI styling: e.g., a timeline view showing `[Supervisor routed to Sales Worker] -> [Sales Worker executed ChromaDB search] -> [Sales Worker called MCP Server]`.
 3. Final Polish:
    - Integrate this component into the `Customer 360` or `Dashboard` detail view.
-   - Review `prompts.md`. Append a log stating we implemented Full CRUD operations, Zod input validation, and an Agent Trace UI to finalize Week 6.
+   - Review `prompt.md`. Append a log stating we implemented Full CRUD operations, Zod input validation, and an Agent Trace UI to finalize Week 6.
 
 [EXECUTION CONSTRAINTS]
 Run `npm run lint`. Fix any TypeScript type mismatches for the new JSON logs.

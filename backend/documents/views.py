@@ -2,7 +2,7 @@ import asyncio
 import logging
 import threading
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -14,6 +14,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
@@ -35,29 +36,34 @@ logger = logging.getLogger(__name__)
 
 def _run_mock_agent_in_background(document_id) -> None:
     try:
-        document = Document.objects.get(id=document_id)
-    except Document.DoesNotExist:
-        logger.exception("Document %s not found for background processing", document_id)
-        return
-
-    try:
-        ingest_document(document)
-    except Exception:
-        logger.exception("Memory ingestion failed for document %s", document_id)
-
-    try:
-        asyncio.run(trigger_agent_run(document_id))
-    except Exception:
-        logger.exception("Agent run failed for document %s", document_id)
         try:
             document = Document.objects.get(id=document_id)
         except Document.DoesNotExist:
             logger.exception(
-                "Document %s vanished while marking agent run failed", document_id
+                "Document %s not found for background processing", document_id
             )
             return
-        document.status = Document.Status.FAILED
-        document.save(update_fields=["status"])
+
+        try:
+            ingest_document(document)
+        except Exception:
+            logger.exception("Memory ingestion failed for document %s", document_id)
+
+        try:
+            asyncio.run(trigger_agent_run(document_id))
+        except Exception:
+            logger.exception("Agent run failed for document %s", document_id)
+            try:
+                document = Document.objects.get(id=document_id)
+            except Document.DoesNotExist:
+                logger.exception(
+                    "Document %s vanished while marking agent run failed", document_id
+                )
+                return
+            document.status = Document.Status.FAILED
+            document.save(update_fields=["status"])
+    finally:
+        connection.close()
 
 
 @extend_schema_view(
@@ -114,6 +120,7 @@ class DocumentViewSet(ModelViewSet):
     """ViewSet for uploading, querying, and managing documents."""
 
     serializer_class = DocumentSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         latest_agent_run = (
@@ -127,6 +134,14 @@ class DocumentViewSet(ModelViewSet):
             .annotate(latest_agent_run_id_value=Subquery(latest_agent_run))
             .order_by("-created_at")
         )
+        user = getattr(self.request, "user", None)
+        if user and user.is_authenticated:
+            org = getattr(getattr(user, "profile", None), "organization", None)
+            if org is not None:
+                queryset = queryset.filter(organization=org)
+            elif not user.is_superuser:
+                queryset = queryset.none()
+
         organization_id = self.request.query_params.get("organization")
         if organization_id:
             queryset = queryset.filter(organization_id=organization_id)
@@ -222,4 +237,4 @@ class DocumentViewSet(ModelViewSet):
     def chat(self, request, pk=None):
         from orchestration.views import DocumentChatView
 
-        return DocumentChatView().post(request, pk=pk)
+        return DocumentChatView.as_view()(request._request, pk=pk)

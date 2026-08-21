@@ -226,33 +226,46 @@ def _load_document_text(file_path: str) -> list[str]:
     return _get_text_splitter().split_text(text)
 
 
-def _extract_document_chunks(document: Any) -> list[str]:
-    """Stage a Document's file to a local temp path, then extract/chunk it.
+def extract_text_from_fieldfile(field_file: Any) -> str:
+    """Stage a FieldFile to a local temp path, then extract raw text.
 
     `extract_text` needs a real filesystem path (PyPDFLoader/Docx2txtLoader
-    both require one) -- `document.file.path` only works for storage backends
+    both require one) -- `field_file.path` only works for storage backends
     with local filesystem access. `django-storages`'s `S3Storage` (wired up
     via settings.USE_S3) has no `.path` and raises `NotImplementedError`.
-    Reading through `document.file.open()`/`.chunks()` instead works
-    identically for every storage backend, local included, so this is one
-    unconditional code path rather than branching on USE_S3.
+    Reading through `field_file.open()`/`.chunks()` instead works
+    identically for every storage backend, local included, ensuring handles
+    and temporary files are always cleaned up.
     """
-    suffix = os.path.splitext(document.file.name)[1]
+    if not field_file:
+        return ""
+
+    file_name = getattr(field_file, "name", "") or "document"
+    suffix = os.path.splitext(file_name)[1]
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
 
     try:
-        document.file.open("rb")
+        field_file.open("rb")
         try:
             with open(tmp_path, "wb") as tmp:
-                for chunk in document.file.chunks():
+                for chunk in field_file.chunks():
                     tmp.write(chunk)
         finally:
-            document.file.close()
+            field_file.close()
 
-        return _load_document_text(tmp_path)
+        return extract_text(tmp_path)
     finally:
-        os.remove(tmp_path)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+def _extract_document_chunks(document: Any) -> list[str]:
+    """Extract and split document text into chunks using extract_text_from_fieldfile."""
+    text = extract_text_from_fieldfile(document.file)
+    if not text.strip():
+        return []
+    return _get_text_splitter().split_text(text)
 
 
 def ingest_document(document: Any) -> None:

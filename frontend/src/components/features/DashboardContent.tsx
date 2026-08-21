@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AnswerDisplay } from "@/components/features/AnswerDisplay";
 import { Dropzone } from "@/components/features/Dropzone";
@@ -29,6 +29,11 @@ export function DashboardContent() {
     const trimmed = organizationIdDraft.trim();
     return UUID_PATTERN.test(trimmed) ? trimmed : "";
   }, [organizationIdDraft]);
+
+  useEffect(() => {
+    setUploads([]);
+    setStatuses({});
+  }, [organizationId]);
 
   const stats = useMemo(() => {
     const values = Object.values(statuses);

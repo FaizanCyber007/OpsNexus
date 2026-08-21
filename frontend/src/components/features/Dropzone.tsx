@@ -33,7 +33,10 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
   const { showError } = useToast();
 
   async function uploadFile(file: File) {
-    const id = `${file.name}-${Date.now()}`;
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
     const validationError = validateUploadFile(file);
     if (validationError) {

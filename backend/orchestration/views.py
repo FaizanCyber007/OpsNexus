@@ -14,17 +14,20 @@ import time
 from typing import Any
 
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from documents.models import Document
 from memory.vector_client import (
     ChromaDBClient,
-    extract_text,
+    extract_text_from_fieldfile,
     get_organization_collection_name,
 )
 from orchestration.model_client import (
@@ -89,7 +92,7 @@ def _retrieve_document_context(
     # Fallback to direct file text if ChromaDB yielded no chunks
     if not chunks and document.file:
         try:
-            full_text = extract_text(document.file.path)
+            full_text = extract_text_from_fieldfile(document.file)
             if full_text.strip():
                 excerpt = full_text[:4000]
                 chunks.append(
@@ -97,7 +100,7 @@ def _retrieve_document_context(
                         "text": excerpt,
                         "metadata": {
                             "document_id": str(document.id),
-                            "file_name": document.file_path,
+                            "file_name": document.file_path or document.file.name,
                             "source": "fallback_extract",
                         },
                         "distance": 0.0,
@@ -145,7 +148,7 @@ async def _query_groq_llm(
     start_time = time.perf_counter()
     try:
         llm = LLMFactory().get_worker_llm()
-        result = await llm.ainvoke(prompt)
+        result = await asyncio.wait_for(llm.ainvoke(prompt), timeout=30.0)
         elapsed_ms = max(1, int((time.perf_counter() - start_time) * 1000))
         content = (
             result.content if hasattr(result, "content") else str(result)
@@ -181,16 +184,16 @@ async def _query_groq_llm(
             "status": "success",
             "is_simulated": True,
         }
-    except Exception as exc:
+    except Exception:
         logger.exception("Groq inference call failed")
         elapsed_ms = max(1, int((time.perf_counter() - start_time) * 1000))
         return {
             "model_name": model_name,
             "provider": "groq",
-            "response": f"Groq inference failed: {str(exc)}",
+            "response": "An error occurred during inference. Please try again later.",
             "execution_time_ms": elapsed_ms,
             "status": "error",
-            "error": str(exc),
+            "error": "Inference request failed.",
         }
 
 
@@ -204,7 +207,7 @@ async def _query_gemini_llm(
     start_time = time.perf_counter()
     try:
         llm = LLMFactory().get_supervisor_llm()
-        result = await llm.ainvoke(prompt)
+        result = await asyncio.wait_for(llm.ainvoke(prompt), timeout=30.0)
         elapsed_ms = max(1, int((time.perf_counter() - start_time) * 1000))
         content = (
             result.content if hasattr(result, "content") else str(result)
@@ -239,16 +242,16 @@ async def _query_gemini_llm(
             "status": "success",
             "is_simulated": True,
         }
-    except Exception as exc:
+    except Exception:
         logger.exception("Gemini inference call failed")
         elapsed_ms = max(1, int((time.perf_counter() - start_time) * 1000))
         return {
             "model_name": model_name,
             "provider": "gemini",
-            "response": f"Gemini inference failed: {str(exc)}",
+            "response": "An error occurred during inference. Please try again later.",
             "execution_time_ms": elapsed_ms,
             "status": "error",
-            "error": str(exc),
+            "error": "Inference request failed.",
         }
 
 
@@ -268,21 +271,29 @@ async def _execute_chat_routing(
             _query_gemini_llm(prompt, primary_text, question),
         )
 
-        groq_time = groq_result.get("execution_time_ms", 0)
-        gemini_time = gemini_result.get("execution_time_ms", 0)
+        is_simulated = bool(
+            groq_result.get("is_simulated") or gemini_result.get("is_simulated")
+        )
 
-        faster_model = None
-        if (
-            groq_result.get("status") == "success"
-            and gemini_result.get("status") == "success"
-        ):
-            faster_model = "groq" if groq_time < gemini_time else "gemini"
-        elif groq_result.get("status") == "success":
-            faster_model = "groq"
-        elif gemini_result.get("status") == "success":
-            faster_model = "gemini"
+        if is_simulated:
+            faster_model = None
+            time_diff_ms = None
+        else:
+            groq_time = groq_result.get("execution_time_ms", 0)
+            gemini_time = gemini_result.get("execution_time_ms", 0)
 
-        time_diff_ms = abs(gemini_time - groq_time)
+            faster_model = None
+            if (
+                groq_result.get("status") == "success"
+                and gemini_result.get("status") == "success"
+            ):
+                faster_model = "groq" if groq_time < gemini_time else "gemini"
+            elif groq_result.get("status") == "success":
+                faster_model = "groq"
+            elif gemini_result.get("status") == "success":
+                faster_model = "gemini"
+
+            time_diff_ms = abs(gemini_time - groq_time)
 
         return {
             "compare": True,
@@ -307,6 +318,8 @@ async def _execute_chat_routing(
 
 class DocumentChatView(APIView):
     """Interactive RAG Document Chat & Multi-Model Arena API."""
+
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="Ask Question About Document (RAG Chat & Arena)",
@@ -395,24 +408,36 @@ class DocumentChatView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        user = request.user
+        qs = Document.objects.filter(deleted_at__isnull=True)
+        if user and user.is_authenticated:
+            org = getattr(getattr(user, "profile", None), "organization", None)
+            if org is not None:
+                qs = qs.filter(organization=org)
+            elif not user.is_superuser:
+                qs = qs.none()
+
         try:
-            document = get_object_or_404(
-                Document.objects.filter(deleted_at__isnull=True), id=doc_id
-            )
-        except Exception:
+            document = get_object_or_404(qs, id=doc_id)
+        except (Http404, ValidationError, ValueError):
             return Response(
                 {"error": f"Document {doc_id} not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        question = request.data.get("question", "").strip()
-        if not question:
+        serializer = DocumentChatRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            err_msg = " ".join(
+                f"{k}: {', '.join(v) if isinstance(v, list) else v}"
+                for k, v in serializer.errors.items()
+            )
             return Response(
-                {"error": "The 'question' field is required and cannot be blank."},
+                {"error": err_msg, **serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        compare = bool(request.data.get("compare", False))
+        question = serializer.validated_data["question"]
+        compare = serializer.validated_data.get("compare", False)
 
         # Check semantic cache for exact same document + question + compare mode
         cache_key = _get_chat_cache_key(document.id, question, compare)
@@ -438,12 +463,24 @@ class DocumentChatView(APIView):
                     compare=compare,
                 )
             )
-            # Cache successfully computed chat result for 15 minutes
-            cache.set(cache_key, chat_data, timeout=CHAT_CACHE_TTL_SECONDS)
+            # Only cache successfully computed chat results
+            all_succeeded = False
+            if compare:
+                results = chat_data.get("results", {})
+                all_succeeded = (
+                    results.get("groq", {}).get("status") == "success"
+                    and results.get("gemini", {}).get("status") == "success"
+                )
+            else:
+                all_succeeded = chat_data.get("result", {}).get("status") == "success"
+
+            if all_succeeded:
+                cache.set(cache_key, chat_data, timeout=CHAT_CACHE_TTL_SECONDS)
+
             return Response(chat_data, status=status.HTTP_200_OK)
-        except Exception as exc:
+        except Exception:
             logger.exception("Failed to process document chat")
             return Response(
-                {"error": f"Internal chat processing error: {str(exc)}"},
+                {"error": "Internal chat processing error. Please try again later."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

@@ -24,8 +24,8 @@ class AnswerSerializer(serializers.ModelSerializer):
 
 
 class ToolCallSerializer(serializers.ModelSerializer):
-    tool_input = serializers.JSONField(source="input_data")
-    tool_output = serializers.JSONField(source="output_data")
+    tool_input = serializers.JSONField(source="input_data", read_only=True)
+    tool_output = serializers.JSONField(source="output_data", read_only=True)
 
     class Meta:
         model = ToolCall

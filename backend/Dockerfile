@@ -2,38 +2,57 @@
 # OpsNexus Backend Production Dockerfile (Django + Gunicorn + WhiteNoise)
 # ==============================================================================
 
-FROM python:3.12-slim
+# --- Stage 1: Build & Dependencies ---
+FROM python:3.12-slim AS builder
 
-# Prevent Python from writing .pyc files and enable unbuffered logging
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PYTHONUNBUFFERED=1
 
-# Install system dependencies required for compilation and Postgres connectivity
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install Python dependencies first for optimal Docker layer caching
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# --- Stage 2: Final Runtime ---
+FROM python:3.12-slim AS runner
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create dedicated non-root user and group
+RUN groupadd -g 1001 appuser && \
+    useradd -u 1001 -g appuser -d /app -s /bin/bash appuser
+
+WORKDIR /app
+
+# Copy installed Python packages from builder stage
+COPY --from=builder /install /usr/local
 
 # Copy backend source code
 COPY . /app/
 
-# Ensure required persistent storage directories exist and entrypoint is executable
+# Ensure required persistent storage directories exist, entrypoint is executable, and owned by appuser
 RUN mkdir -p /app/media /app/chroma_data /app/staticfiles && \
-    chmod +x /app/entrypoint.sh
+    chmod +x /app/entrypoint.sh && \
+    chown -R appuser:appuser /app
 
 # Collect static assets into staticfiles directory using WhiteNoise
 RUN SECRET_KEY="build-static-collection-key" \
     DEBUG="False" \
-    python manage.py collectstatic --noinput
+    python manage.py collectstatic --noinput && \
+    chown -R appuser:appuser /app/staticfiles
+
+USER appuser
 
 EXPOSE 8000
 

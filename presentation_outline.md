@@ -11,18 +11,19 @@
 | Slide | Topic | Focus Area | Allotted Time |
 |---|---|---|---|
 | **Slide 1** | Title & Vision | Introduction & Hook | 1:00 min |
-| **Slide 2** | The Real-World Problem | Unstructured B2B Document Bottlenecks | 1:30 min |
-| **Slide 3** | The Agentic Solution: OpsNexus | Hierarchical Multi-Agent Architecture | 1:30 min |
-| **Slide 4** | End-to-End System Architecture | Full-Stack Architecture & Data Flow | 2:00 min |
-| **Slide 5** | Deep Dive: LangGraph Orchestration | Graph State Machines & Agent Routing | 2:00 min |
-| **Slide 6** | Deep Dive: Model Context Protocol (MCP) | Standardized Enterprise Tool Integration | 1:30 min |
-| **Slide 7** | Multi-Model Cost & Latency Strategy | Gemini + Groq Asymmetric Tiering & Caching | 1:30 min |
-| **Slide 8** | RAG Model Arena & Evaluation | Comparative Benchmarking & Grounded Citations | 1:30 min |
-| **Slide 9** | Live Demo Walkthrough | End-to-End Live Workflow & Trace Inspection | 4:30 min |
+| **Slide 2** | The Real-World Problem | Unstructured B2B Document Bottlenecks | 1:00 min |
+| **Slide 3** | The Agentic Solution: OpsNexus | Hierarchical Multi-Agent Architecture | 1:00 min |
+| **Slide 4** | End-to-End System Architecture | Full-Stack Architecture & Data Flow | 1:30 min |
+| **Slide 5** | Deep Dive: LangGraph Orchestration | Graph State Machines & Agent Routing | 1:30 min |
+| **Slide 6** | Deep Dive: Model Context Protocol (MCP) | Standardized Enterprise Tool Integration | 1:00 min |
+| **Slide 7** | Multi-Model Cost & Latency Strategy | Gemini + Groq Asymmetric Tiering & Caching | 1:00 min |
+| **Slide 8** | RAG Model Arena & Evaluation | Comparative Benchmarking & Grounded Citations | 1:00 min |
+| **Slide 9** | Live Demo Walkthrough | End-to-End Live Workflow & Trace Inspection | 5:00 min |
 | **Slide 10** | Technical Challenges & Solutions | Schema Validation, Async State & Concurrency | 1:30 min |
 | **Slide 11** | Key Learnings & Engineering Takeaways | Deterministic vs. Probabilistic Boundaries | 1:00 min |
-| **Slide 12** | Roadmap, Production Scale & Q&A | Celery, Kubernetes & Future Extensions | 1:00 min |
+| **Slide 12** | Roadmap, Production Scale & Q&A | Celery, Kubernetes & Future Extensions | 0:30 min |
 | **Q&A** | Interactive Technical Defense | Defense on Architecture & Trade-offs | 3:00 min |
+| **Total** | **Full Session** | **Presentation + Live Demo + Defense** | **20:00 min** |
 
 ---
 

@@ -96,6 +96,7 @@ export function AgentTraceViewer({ agentRunId, isTerminal }: AgentTraceViewerPro
   const { showError } = useToast();
 
   useEffect(() => {
+    setSteps([]);
     if (!agentRunId) return;
 
     let cancelled = false;

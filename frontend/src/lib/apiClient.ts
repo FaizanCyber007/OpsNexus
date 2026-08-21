@@ -62,5 +62,9 @@ export const apiClient = {
     request<DocumentChatResponse>(`/v1/documents/${documentId}/chat/`, {
       method: "POST",
       body: JSON.stringify(data),
+      signal:
+        typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+          ? AbortSignal.timeout(60000)
+          : undefined,
     }),
 };

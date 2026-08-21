@@ -57,7 +57,7 @@ function ContextSnippetsDisclosure({ chunks }: { chunks: DocumentChunk[] }) {
             <div key={idx} className="flex flex-col gap-1 border-b border-white/5 pb-2 last:border-b-0 last:pb-0">
               <div className="flex items-center justify-between text-[11px] text-white/40">
                 <span className="font-mono">Chunk #{idx + 1}</span>
-                {chunk.distance !== undefined && (
+                {chunk.distance != null && (
                   <span className="text-white/30">Distance: {chunk.distance.toFixed(3)}</span>
                 )}
               </div>
@@ -306,7 +306,7 @@ export function DocumentChatPanel({ document, documentId }: DocumentChatPanelPro
                           </div>
 
                           <div className="flex items-center gap-1.5">
-                            {msg.faster_model === "groq" && (
+                            {msg.faster_model === "groq" && msg.time_diff_ms != null && (
                               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 animate-pulse">
                                 🏆 Faster by {msg.time_diff_ms}ms
                               </span>
@@ -346,7 +346,7 @@ export function DocumentChatPanel({ document, documentId }: DocumentChatPanelPro
                           </div>
 
                           <div className="flex items-center gap-1.5">
-                            {msg.faster_model === "gemini" && (
+                            {msg.faster_model === "gemini" && msg.time_diff_ms != null && (
                               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 animate-pulse">
                                 🏆 Faster by {msg.time_diff_ms}ms
                               </span>

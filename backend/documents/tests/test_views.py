@@ -10,9 +10,25 @@ from documents.factories import DocumentFactory
 from documents.models import Document
 
 
+from django.contrib.auth import get_user_model
+from core.models import UserProfile
+
+User = get_user_model()
+
+
 @pytest.fixture
-def api_client():
-    return APIClient()
+def auth_context(db):
+    user = User.objects.create_superuser(
+        username="admin", password="password", email="admin@example.com"
+    )
+    return {"user": user}
+
+
+@pytest.fixture
+def api_client(auth_context):
+    client = APIClient()
+    client.force_authenticate(user=auth_context["user"])
+    return client
 
 
 @pytest.mark.django_db
@@ -262,8 +278,8 @@ class TestDocumentAnswersEndpoint:
             AnswerFactory(agent_run=agent_run, content=f"Answer {i}")
 
         # Should execute a fixed small number of queries
-        # (Document lookup + Answer query + prefetch)
-        with django_assert_num_queries(3):
+        # (User lookup + Document lookup + Answer query + citations prefetch)
+        with django_assert_num_queries(4):
             response = api_client.get(f"/api/documents/{document.id}/answers/")
             assert response.status_code == 200
             assert len(response.data) == 5
