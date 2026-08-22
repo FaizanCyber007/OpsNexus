@@ -6,10 +6,11 @@ import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   FileText,
-  Bot,
+  MessageSquare,
+  ShieldCheck,
   Settings,
   Zap,
-  Layers,
+  Building,
 } from "lucide-react";
 
 import { useTenant, DEMO_ORG_ID } from "@/contexts/TenantContext";
@@ -17,10 +18,9 @@ import { cn } from "@/lib/utils";
 
 interface NavItem {
   label: string;
-  href?: string;
+  href: string;
   icon: typeof LayoutDashboard;
-  shortcut?: string;
-  badge?: string;
+  description: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -28,22 +28,31 @@ const NAV_ITEMS: NavItem[] = [
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
-    shortcut: "⌘D",
+    description: "Overview & Upload",
   },
   {
     label: "Documents",
+    href: "/dashboard/documents",
     icon: FileText,
-    badge: "Soon",
+    description: "Browse & Search",
   },
   {
-    label: "Agents & MCP",
-    icon: Bot,
-    badge: "Soon",
+    label: "AI Swarm & Tools",
+    href: "/dashboard/agents",
+    icon: Zap,
+    description: "AI Models & Policies",
   },
   {
-    label: "Settings",
+    label: "Activity & Security",
+    href: "/dashboard/audit",
+    icon: ShieldCheck,
+    description: "Audit Log & History",
+  },
+  {
+    label: "Rules & Settings",
+    href: "/dashboard/settings",
     icon: Settings,
-    badge: "Soon",
+    description: "Alerts & Guides",
   },
 ];
 
@@ -51,29 +60,28 @@ export function Sidebar() {
   const pathname = usePathname();
   const { organizationId } = useTenant();
 
-  const tenantLabel = organizationId
+  const workspaceName = organizationId
     ? organizationId === DEMO_ORG_ID
-      ? "Default Tenant"
-      : `Org: ${organizationId.slice(0, 8)}...`
-    : "No Organization Selected";
+      ? "Main Workspace"
+      : "Company Workspace"
+    : "Main Workspace";
 
   return (
-    <aside className="relative flex h-full w-64 flex-col border-r border-white/[0.08] bg-[#0c0c10]/90 backdrop-blur-2xl select-none z-20">
+    <aside className="relative flex h-full w-64 flex-col border-r border-white/[0.08] bg-[#0c0c10]/95 backdrop-blur-2xl select-none z-20">
       {/* Brand Header */}
       <div className="flex items-center justify-between px-5 py-5 border-b border-white/[0.06]">
         <Link href="/dashboard" className="flex items-center gap-3 group">
           <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 shadow-lg shadow-indigo-500/25 border border-white/20 group-hover:scale-105 transition-transform">
             <Zap className="h-4 w-4 text-white fill-white/80" />
-            <div className="absolute inset-0 rounded-xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-bold tracking-tight text-white">OpsNexus</span>
-              <span className="rounded bg-indigo-500/20 px-1 py-0.2 text-[9px] font-semibold text-indigo-300 border border-indigo-500/30">
-                PRO
+              <span className="rounded bg-indigo-500/20 px-1.5 py-0.2 text-[9px] font-semibold text-indigo-300 border border-indigo-500/30">
+                AI
               </span>
             </div>
-            <p className="text-[11px] text-white/40 font-mono">Autonomous Back-Office</p>
+            <p className="text-[11px] text-white/40">Document Intelligence</p>
           </div>
         </Link>
       </div>
@@ -82,15 +90,10 @@ export function Sidebar() {
       <div className="px-3 pt-3 pb-1">
         <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs text-white/70">
           <div className="flex items-center gap-2 min-w-0">
-            <div
-              className={cn(
-                "h-2 w-2 shrink-0 rounded-full",
-                organizationId ? "bg-emerald-400 animate-pulse" : "bg-white/20"
-              )}
-            />
-            <span className="font-medium text-white/90 truncate">{tenantLabel}</span>
+            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+            <span className="font-medium text-white/90 truncate">{workspaceName}</span>
           </div>
-          <Layers className="h-3.5 w-3.5 text-white/40 shrink-0" />
+          <Building className="h-3.5 w-3.5 text-white/40 shrink-0" />
         </div>
       </div>
 
@@ -99,62 +102,54 @@ export function Sidebar() {
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive =
-            Boolean(item.href) &&
-            (pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href ?? "")));
-
-          if (isActive && item.href) {
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="relative flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-white transition-colors"
-              >
-                <motion.div
-                  layoutId="sidebarActiveBackground"
-                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/20 via-violet-500/15 to-transparent border border-indigo-500/30 shadow-inner"
-                  transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                />
-                <div className="relative z-10 flex items-center gap-2.5">
-                  <Icon className="h-4 w-4 text-indigo-300" />
-                  <span>{item.label}</span>
-                </div>
-                {item.shortcut && (
-                  <span className="relative z-10 font-mono text-[10px] text-white/40">
-                    {item.shortcut}
-                  </span>
-                )}
-              </Link>
-            );
-          }
+            item.href === "/dashboard"
+              ? pathname === "/dashboard"
+              : pathname.startsWith(item.href);
 
           return (
-            <div
+            <Link
               key={item.label}
-              className="flex items-center justify-between rounded-xl px-3 py-2 text-xs text-white/40 cursor-not-allowed transition-colors hover:text-white/60"
-            >
-              <div className="flex items-center gap-2.5">
-                <Icon className="h-4 w-4 stroke-[1.75]" />
-                <span>{item.label}</span>
-              </div>
-              {item.badge && (
-                <span className="rounded-md border border-white/[0.08] bg-white/[0.02] px-1.5 py-0.5 text-[9px] font-mono text-white/30">
-                  {item.badge}
-                </span>
+              href={item.href}
+              className={cn(
+                "relative flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold transition-all group",
+                isActive
+                  ? "text-white"
+                  : "text-white/60 hover:text-white hover:bg-white/[0.04]"
               )}
-            </div>
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="sidebarActiveBackground"
+                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/25 via-violet-500/20 to-transparent border border-indigo-500/30 shadow-inner"
+                  transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                />
+              )}
+              <div className="relative z-10 flex items-center gap-2.5">
+                <Icon
+                  className={cn(
+                    "h-4 w-4 transition-colors",
+                    isActive
+                      ? "text-indigo-400"
+                      : "text-white/40 group-hover:text-indigo-300"
+                  )}
+                />
+                <div>
+                  <span className="block">{item.label}</span>
+                </div>
+              </div>
+            </Link>
           );
         })}
       </nav>
 
       {/* Footer Status Widget */}
-      <div className="mt-auto border-t border-white/[0.06] p-4 space-y-2">
+      <div className="mt-auto border-t border-white/[0.06] p-4 space-y-1.5">
         <div className="flex items-center justify-between text-[11px]">
-          <div className="flex items-center gap-2 text-white/50">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            <span>Agent Cluster Online</span>
+          <div className="flex items-center gap-2 text-white/60">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-medium">AI Ready</span>
           </div>
-          <span className="font-mono text-white/30 text-[10px]">v1.4.2</span>
+          <span className="text-white/30 text-[10px]">Secure & Private</span>
         </div>
       </div>
     </aside>

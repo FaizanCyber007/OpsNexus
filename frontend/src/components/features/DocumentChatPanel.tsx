@@ -69,8 +69,8 @@ function ContextSnippetsDisclosure({ chunks }: { chunks: DocumentChunk[] }) {
         <Database className="h-3 w-3" />
         <span>
           {isOpen
-            ? "Hide Vector Context"
-            : `View ${chunks.length} ChromaDB Context Chunk(s)`}
+            ? "Hide Document Sources"
+            : `View ${chunks.length} Source Excerpt(s)`}
         </span>
         {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
       </button>
@@ -83,12 +83,9 @@ function ContextSnippetsDisclosure({ chunks }: { chunks: DocumentChunk[] }) {
               className="space-y-1 border-b border-white/[0.04] pb-2.5 last:border-b-0 last:pb-0"
             >
               <div className="flex items-center justify-between text-[10px] text-white/40">
-                <span className="font-mono text-indigo-300">Chunk #{idx + 1}</span>
-                {chunk.distance != null && (
-                  <span className="font-mono">Distance: {chunk.distance.toFixed(3)}</span>
-                )}
+                <span className="font-semibold text-indigo-300">Excerpt #{idx + 1}</span>
               </div>
-              <p className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-white/70">
+              <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-white/80">
                 {chunk.text}
               </p>
             </div>

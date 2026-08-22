@@ -19,7 +19,7 @@ from rest_framework.viewsets import ModelViewSet
 from agents.models import AgentRun, Answer
 from agents.serializers import AnswerSerializer
 from core.middleware import AuditLogContextMixin
-from core.throttling import DocumentUploadRateThrottle
+from core.throttling import ChatRateThrottle, DocumentUploadRateThrottle
 from orchestration.serializers import (
     DocumentChatRequestSerializer,
     DocumentChatResponseSerializer,
@@ -92,6 +92,8 @@ class DocumentViewSet(AuditLogContextMixin, ModelViewSet):
     def get_throttles(self):
         if getattr(self, "action", None) == "create":
             return [DocumentUploadRateThrottle()]
+        if getattr(self, "action", None) == "chat":
+            return [ChatRateThrottle()]
         return super().get_throttles()
 
     def get_queryset(self):

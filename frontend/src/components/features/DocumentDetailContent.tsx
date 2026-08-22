@@ -8,11 +8,16 @@ import {
   MessageSquare,
   Bot,
   FileText,
+  Workflow,
+  Download,
+  ShieldCheck,
 } from "lucide-react";
 import { AgentIntelligencePanel } from "@/components/features/AgentIntelligencePanel";
+import { AgentTraceViewer } from "@/components/features/AgentTraceViewer";
 import { DocumentChatPanel } from "@/components/features/DocumentChatPanel";
 import { DocumentPreviewPane } from "@/components/features/DocumentPreviewPane";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Card } from "@/components/ui/Card";
 import { useToast } from "@/contexts/ToastContext";
 import { useDocumentPolling } from "@/hooks/useDocumentPolling";
 import { apiClient } from "@/lib/apiClient";
@@ -31,7 +36,7 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
   const { document } = useDocumentPolling(documentId);
   const [answers, setAnswers] = useState<Answer[] | null>(null);
   const [answersError, setAnswersError] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chat" | "intelligence">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "intelligence" | "trace">("chat");
   const { showError } = useToast();
 
   useEffect(() => {
@@ -71,18 +76,18 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
         <div className="flex items-center gap-3 min-w-0">
           <Link
-            href="/dashboard"
+            href="/dashboard/documents"
             className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.08] hover:text-white transition-all shrink-0"
-            aria-label="Back to dashboard"
+            aria-label="Back to documents"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
 
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-[11px] text-white/40 mb-0.5">
-              <span>Dashboard</span>
+              <Link href="/dashboard" className="hover:text-white/70 transition-colors">Dashboard</Link>
               <span>/</span>
-              <span>Documents</span>
+              <Link href="/dashboard/documents" className="hover:text-white/70 transition-colors">Documents</Link>
               <span>/</span>
               <span className="font-mono text-white/60 truncate">{documentId.slice(0, 8)}</span>
             </div>
@@ -115,7 +120,7 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
               type="button"
               onClick={() => setActiveTab("chat")}
               className={cn(
-                "relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-xs font-semibold transition-colors",
+                "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors",
                 activeTab === "chat" ? "text-white" : "text-white/50 hover:text-white/80"
               )}
             >
@@ -128,7 +133,7 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
               )}
               <span className="relative z-10 flex items-center gap-1.5">
                 <MessageSquare className="h-3.5 w-3.5 text-indigo-400" />
-                <span>RAG Chat & Model Arena</span>
+                <span>RAG Arena</span>
               </span>
             </button>
 
@@ -136,7 +141,7 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
               type="button"
               onClick={() => setActiveTab("intelligence")}
               className={cn(
-                "relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-xs font-semibold transition-colors",
+                "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors",
                 activeTab === "intelligence" ? "text-white" : "text-white/50 hover:text-white/80"
               )}
             >
@@ -149,21 +154,67 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
               )}
               <span className="relative z-10 flex items-center gap-1.5">
                 <Bot className="h-3.5 w-3.5 text-violet-400" />
-                <span>Agent Intelligence & Trace</span>
+                <span>Synthesized Report</span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("trace")}
+              className={cn(
+                "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors",
+                activeTab === "trace" ? "text-white" : "text-white/50 hover:text-white/80"
+              )}
+            >
+              {activeTab === "trace" && (
+                <motion.div
+                  layoutId="detailActiveTab"
+                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/25 to-violet-500/25 border border-indigo-500/30 shadow-inner"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <Workflow className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Execution Trace</span>
               </span>
             </button>
           </div>
 
           {/* Active Tab Panel */}
           <div className="flex-1 min-h-0">
-            {activeTab === "chat" ? (
+            {activeTab === "chat" && (
               <DocumentChatPanel document={document} documentId={documentId} />
-            ) : (
+            )}
+            {activeTab === "intelligence" && (
               <AgentIntelligencePanel
                 document={document}
                 answers={answers}
                 answersError={answersError}
               />
+            )}
+            {activeTab === "trace" && (
+              <Card className="p-5 h-full overflow-y-auto">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-bold text-xs text-white uppercase tracking-wider text-indigo-400">
+                      Chronological Tool Trace Timeline
+                    </h3>
+                    <p className="text-xs text-white/50">
+                      Step-by-step reasoning, tool invocations, and policy lookups for this document run.
+                    </p>
+                  </div>
+                  {document?.latest_agent_run_id ? (
+                    <AgentTraceViewer
+                      agentRunId={document.latest_agent_run_id}
+                      isTerminal={document.status === "completed" || document.status === "failed"}
+                    />
+                  ) : (
+                    <div className="py-8 text-center text-white/40 text-xs">
+                      No agent run registered yet.
+                    </div>
+                  )}
+                </div>
+              </Card>
             )}
           </div>
         </div>

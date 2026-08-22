@@ -1,3 +1,4 @@
+# pyright: reportIncompatibleVariableOverride=false, reportIncompatibleMethodOverride=false
 import os
 
 from rest_framework import serializers

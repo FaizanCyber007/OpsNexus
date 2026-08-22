@@ -2,7 +2,11 @@ import { CheckCircle2, Clock, Loader2, XCircle, AlertCircle } from "lucide-react
 import type { Document } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export type BadgeStatus = Document["status"] | "error";
+export type BadgeStatus =
+  | Document["status"]
+  | "running"
+  | "succeeded"
+  | "error";
 
 interface StatusConfig {
   label: string;
@@ -26,8 +30,21 @@ const STATUS_CONFIG: Record<BadgeStatus, StatusConfig> = {
     icon: Loader2,
     animateIcon: true,
   },
+  running: {
+    label: "Running",
+    badgeClass: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300 shadow-sm shadow-indigo-500/10",
+    dotClass: "bg-indigo-400",
+    icon: Loader2,
+    animateIcon: true,
+  },
   completed: {
     label: "Completed",
+    badgeClass: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
+    dotClass: "bg-emerald-400",
+    icon: CheckCircle2,
+  },
+  succeeded: {
+    label: "Succeeded",
     badgeClass: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
     dotClass: "bg-emerald-400",
     icon: CheckCircle2,

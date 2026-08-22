@@ -1,20 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
-  Files,
-  Activity,
+  FileText,
+  Clock,
   CheckCircle2,
-  Building2,
   Sparkles,
+  ArrowRight,
   ShieldCheck,
+  Receipt,
+  FileSpreadsheet,
+  FolderOpen,
 } from "lucide-react";
 import { AnswerDisplay } from "@/components/features/AnswerDisplay";
 import { Dropzone } from "@/components/features/Dropzone";
 import { RecentRunsTable } from "@/components/features/RecentRunsTable";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
-import { useTenant, DEMO_ORG_ID } from "@/contexts/TenantContext";
+import { useTenant } from "@/contexts/TenantContext";
 import type { Document } from "@/lib/types";
 
 interface UploadedDoc {
@@ -23,16 +27,10 @@ interface UploadedDoc {
 }
 
 export function DashboardContent() {
-  const { organizationIdDraft, organizationId, handleOrgChange: setTenantDraft } = useTenant();
+  const { organizationId } = useTenant();
   const [uploads, setUploads] = useState<UploadedDoc[]>([]);
   const [statuses, setStatuses] = useState<Record<string, Document["status"]>>({});
   const [runsVersion, setRunsVersion] = useState(0);
-
-  const handleOrgChange = (newDraft: string) => {
-    setTenantDraft(newDraft);
-    setUploads([]);
-    setStatuses({});
-  };
 
   const stats = useMemo(() => {
     const values = Object.values(statuses);
@@ -53,107 +51,76 @@ export function DashboardContent() {
   }
 
   return (
-    <div className="flex w-full max-w-4xl flex-col gap-6">
-      {/* Dashboard Top Header */}
+    <div className="flex w-full max-w-5xl flex-col gap-6">
+      {/* Friendly Dashboard Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[11px] font-mono font-medium text-emerald-400/90 tracking-wide uppercase">
-              Autonomous Pipeline Active
+            <span className="text-xs font-medium text-emerald-400">
+              AI Document Assistant Active
             </span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            Document Ingestion & Resolution
+            Document Operations & Intake
           </h1>
-          <p className="mt-1 text-xs sm:text-sm text-white/50">
-            Automated intake, multi-agent reasoning, semantic ChromaDB indexing, and MCP policy lookup.
+          <p className="mt-1 text-xs sm:text-sm text-white/60">
+            Upload vendor questionnaires, invoices, or compliance documents for automated review, risk flags, and answers.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-xs text-indigo-300">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            <span>SOC2 & Enterprise Compliant</span>
-          </div>
+          <Link
+            href="/dashboard/documents"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-white hover:bg-white/[0.08] transition-colors"
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            <span>View All Documents</span>
+          </Link>
         </div>
       </div>
 
-      {/* KPI Stats Overview */}
+      {/* 3 Simple, Clear KPI Cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatTile
-          label="Total Documents Ingested"
+          label="Documents Ingested"
           value={stats.total}
-          icon={<Files className="h-4 w-4" />}
-          subtext="active session"
+          icon={<FileText className="h-4 w-4 text-indigo-400" />}
+          subtext="in this session"
         />
         <StatTile
-          label="Agent Reasoning Active"
+          label="Currently Analyzing"
           value={stats.processing}
-          icon={<Activity className="h-4 w-4 text-amber-400" />}
+          icon={<Clock className="h-4 w-4 text-amber-400" />}
           accentClass="text-amber-400"
-          subtext="in-flight runs"
+          subtext="AI reviewing clauses"
         />
         <StatTile
-          label="Resolved & Verified"
+          label="Ready & Verified"
           value={stats.completed}
           icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />}
           accentClass="text-emerald-400"
-          subtext="ready for review"
+          subtext="ready for questions"
         />
       </div>
 
-      {/* Organization Selector & Document Intake Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-300">
-                <Building2 className="h-4 w-4" />
-              </div>
-              <div>
-                <CardTitle>Organization Tenant Scope</CardTitle>
-                <CardDescription>
-                  Multi-tenant isolation token for ChromaDB collections & document storage.
-                </CardDescription>
-              </div>
+      {/* Clean Document Upload Card */}
+      <Card className="border-indigo-500/20 bg-gradient-to-b from-white/[0.03] to-transparent">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-300">
+              <Sparkles className="h-4 w-4" />
             </div>
-
-            {/* Quick Demo Pill Helper */}
-            <button
-              type="button"
-              onClick={() => handleOrgChange(DEMO_ORG_ID)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-medium text-indigo-300 hover:bg-indigo-500/20 transition-colors"
-            >
-              <Sparkles className="h-3 w-3" />
-              <span>Use Default Tenant UUID</span>
-            </button>
+            <div>
+              <CardTitle>Upload a New Document</CardTitle>
+              <CardDescription>
+                Drag and drop your file below. Supported: PDF, Word (.docx), Excel/CSV, Text, and Logs.
+              </CardDescription>
+            </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-5">
-          <div>
-            <label htmlFor="organization-id-input" className="block text-xs font-medium text-white/70 mb-1.5">
-              Organization Identifier (UUIDv4)
-            </label>
-            <div className="relative">
-              <input
-                id="organization-id-input"
-                value={organizationIdDraft}
-                onChange={(event) => handleOrgChange(event.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000"
-                className="w-full rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2.5 font-mono text-xs text-white placeholder-white/20 focus:border-indigo-400 focus:bg-white/[0.06] focus:outline-none transition-all shadow-inner"
-              />
-              {organizationId && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[11px] text-emerald-400 font-medium font-sans">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Valid Tenant
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Integrated Dropzone */}
+        <CardContent className="pt-2">
           <Dropzone
             organizationId={organizationId}
             onUploaded={(response, fileName) => {
@@ -164,12 +131,12 @@ export function DashboardContent() {
         </CardContent>
       </Card>
 
-      {/* Live Pipeline Streaming Results */}
+      {/* Live AI Analysis Results (When Uploaded) */}
       {uploads.length > 0 && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white/90">
-              Live Resolution Pipeline ({uploads.length})
+              Recent Ingestion Results ({uploads.length})
             </h2>
           </div>
           <div className="space-y-3">
@@ -187,7 +154,7 @@ export function DashboardContent() {
         </div>
       )}
 
-      {/* Recent Runs High Density Grid */}
+      {/* Recent Ingested Documents List */}
       <RecentRunsTable
         organizationId={organizationId}
         refreshKey={runsVersion}

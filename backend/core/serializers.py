@@ -1,8 +1,9 @@
-"""DRF Serializers for core app models (AuditLog, HealthRule, Playbook)."""
+# pyright: reportIncompatibleVariableOverride=false, reportIncompatibleMethodOverride=false
+"""DRF Serializers for core app models (AuditLog, HealthRule, Playbook, Organization, UserProfile)."""
 
 from rest_framework import serializers
 
-from core.models import AuditLog, HealthRule, Playbook
+from core.models import AuditLog, HealthRule, Organization, Playbook, UserProfile
 
 
 class AuditLogSerializer(serializers.ModelSerializer):
@@ -61,6 +62,43 @@ class PlaybookSerializer(serializers.ModelSerializer):
             "description",
             "content",
             "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class OrganizationSerializer(serializers.ModelSerializer):
+    """Serializer for Organization instances."""
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    """Serializer for UserProfile instances."""
+
+    username = serializers.CharField(source="user.username", read_only=True)
+    email = serializers.CharField(source="user.email", read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            "id",
+            "user",
+            "username",
+            "email",
+            "organization",
+            "role",
             "created_at",
             "updated_at",
         ]
