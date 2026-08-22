@@ -10,8 +10,8 @@ class TenantScopedViewSetMixin:
 
     def get_queryset(self):
         # We assume the viewset has a base `queryset` defined.
-        queryset = super().get_queryset()
-        user = getattr(self.request, "user", None)
+        queryset = super().get_queryset()  # type: ignore
+        user = getattr(self.request, "user", None)  # type: ignore
 
         if not user or not user.is_authenticated:
             return queryset.none()
@@ -23,7 +23,7 @@ class TenantScopedViewSetMixin:
         )
 
         if user.is_superuser:
-            org_id = self.request.query_params.get("organization")
+            org_id = self.request.query_params.get("organization")  # type: ignore
             if org_id:
                 try:
                     uuid.UUID(str(org_id))

@@ -17,10 +17,10 @@ jest.mock("@/contexts/ToastContext", () => ({
 
 describe("AuditTrailContent", () => {
   it("prevents obsolete requests from updating logs after organizationId changes", async () => {
-    let resolveFirstReq: (value?: unknown) => void;
+    let resolveFirstReq: (value?: unknown) => void = () => {};
     const promiseFirstReq = new Promise(r => { resolveFirstReq = r; });
     
-    let resolveSecondReq: (value?: unknown) => void;
+    let resolveSecondReq: (value?: unknown) => void = () => {};
     const promiseSecondReq = new Promise(r => { resolveSecondReq = r; });
 
     let callCount = 0;
@@ -50,10 +50,10 @@ describe("AuditTrailContent", () => {
   });
 
   it("handles repeated refreshes ignoring older overlapping responses", async () => {
-    let resolveReq1: (value?: unknown) => void;
+    let resolveReq1: (value?: unknown) => void = () => {};
     const promiseReq1 = new Promise(r => { resolveReq1 = r; });
     
-    let resolveReq2: (value?: unknown) => void;
+    let resolveReq2: (value?: unknown) => void = () => {};
     const promiseReq2 = new Promise(r => { resolveReq2 = r; });
 
     let callCount = 0;
@@ -73,9 +73,9 @@ describe("AuditTrailContent", () => {
 
     // We override getAuditLogs to return the overlapping promises now
     let refreshCallCount = 0;
-    let resolveRefresh1: (value?: unknown) => void;
+    let resolveRefresh1: (value?: unknown) => void = () => {};
     const promiseRefresh1 = new Promise(r => { resolveRefresh1 = r; });
-    let resolveRefresh2: (value?: unknown) => void;
+    let resolveRefresh2: (value?: unknown) => void = () => {};
     const promiseRefresh2 = new Promise(r => { resolveRefresh2 = r; });
 
     (apiClient.getAuditLogs as jest.Mock).mockImplementation(() => {

@@ -18,14 +18,14 @@ jest.mock("@/contexts/ToastContext", () => ({
 
 describe("AgentSwarmHubContent", () => {
   it("prevents stale asynchronous responses from updating state after tenant changes", async () => {
-    let resolveMcpA: (value?: unknown) => void;
+    let resolveMcpA: (value?: unknown) => void = () => {};
     const promiseMcpA = new Promise((r) => { resolveMcpA = r; });
-    let resolveMcpB: (value?: unknown) => void;
+    let resolveMcpB: (value?: unknown) => void = () => {};
     const promiseMcpB = new Promise((r) => { resolveMcpB = r; });
 
-    let resolveRunsA: (value?: unknown) => void;
+    let resolveRunsA: (value?: unknown) => void = () => {};
     const promiseRunsA = new Promise((r) => { resolveRunsA = r; });
-    let resolveRunsB: (value?: unknown) => void;
+    let resolveRunsB: (value?: unknown) => void = () => {};
     const promiseRunsB = new Promise((r) => { resolveRunsB = r; });
 
     let mcpCallCount = 0;

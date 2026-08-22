@@ -45,7 +45,11 @@ const HOW_IT_WORKS_STEPS = [
 
 export function AgentSwarmHubContent() {
   const { organizationId } = useTenant();
-  const [testResult, setTestResult] = useState<unknown>(null);
+  const [testResult, setTestResult] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [testRunning, setTestRunning] = useState(false);
+  const [activeTool, setActiveTool] = useState("get_internal_pricing_policy");
+  const [testQuery, setTestQuery] = useState("");
 
   const { showSuccess, showError } = useToast();
   const activeOrgRef = useRef(organizationId);
@@ -272,13 +276,13 @@ export function AgentSwarmHubContent() {
                 <span>Policy Output Retrieved</span>
               </div>
               <div className="rounded-lg bg-black/40 p-3 text-xs text-white/80 leading-relaxed font-sans max-h-60 overflow-y-auto">
-                {activeTool === "get_internal_pricing_policy" && testResult.result?.tiers ? (
+                {activeTool === "get_internal_pricing_policy" && testResult?.result?.tiers ? (
                   <div className="space-y-2">
                     <p className="font-medium text-white/90">
-                      Standard Pricing Tiers ({testResult.result.currency}):
+                      Standard Pricing Tiers ({testResult?.result?.currency}):
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {(testResult as { result: { currency: string, tiers: { name: string, price_per_month: number }[] } }).result.tiers.map((t) => (
+                      {testResult.result.tiers.map((t: { name: string, price_per_month: number }) => (
                         <div key={t.name} className="rounded border border-white/10 bg-white/[0.02] p-2">
                           <span className="font-bold text-indigo-300 block">{t.name}</span>
                           <span className="text-xs text-white/70">${t.price_per_month} / mo</span>

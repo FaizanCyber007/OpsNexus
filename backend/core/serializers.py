@@ -15,7 +15,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
     )
     organization_id = serializers.UUIDField(source="organization.id", read_only=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         model = AuditLog
         fields = [
             "id",
@@ -34,7 +34,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
 class HealthRuleSerializer(serializers.ModelSerializer):
     """Serializer for HealthRule instances."""
 
-    class Meta:
+    class Meta:  # type: ignore
         model = HealthRule
         fields = [
             "id",
@@ -53,7 +53,7 @@ class HealthRuleSerializer(serializers.ModelSerializer):
 class PlaybookSerializer(serializers.ModelSerializer):
     """Serializer for Playbook instances."""
 
-    class Meta:
+    class Meta:  # type: ignore
         model = Playbook
         fields = [
             "id",
@@ -71,7 +71,7 @@ class PlaybookSerializer(serializers.ModelSerializer):
 class OrganizationSerializer(serializers.ModelSerializer):
     """Serializer for Organization instances."""
 
-    class Meta:
+    class Meta:  # type: ignore
         model = Organization
         fields = [
             "id",
@@ -90,7 +90,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     email = serializers.CharField(source="user.email", read_only=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         model = UserProfile
         fields = [
             "id",

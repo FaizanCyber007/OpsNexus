@@ -20,9 +20,9 @@ jest.mock("@/contexts/ToastContext", () => ({
 
 describe("SettingsGovernanceContent", () => {
   it("handles overlapping refreshes ignoring older responses that resolve last", async () => {
-    let resolveRules1: (value?: unknown) => void;
+    let resolveRules1: (value?: unknown) => void = () => {};
     const promiseRules1 = new Promise(r => { resolveRules1 = r; });
-    let resolveRules2: (value?: unknown) => void;
+    let resolveRules2: (value?: unknown) => void = () => {};
     const promiseRules2 = new Promise(r => { resolveRules2 = r; });
 
     let callCount = 0;
@@ -56,9 +56,9 @@ describe("SettingsGovernanceContent", () => {
 
     // Now trigger an overlapping refresh
     let refreshCallCount = 0;
-    let resolveRefreshRules1: (value?: unknown) => void;
+    let resolveRefreshRules1: (value?: unknown) => void = () => {};
     const promiseRefreshRules1 = new Promise(r => { resolveRefreshRules1 = r; });
-    let resolveRefreshRules2: (value?: unknown) => void;
+    let resolveRefreshRules2: (value?: unknown) => void = () => {};
     const promiseRefreshRules2 = new Promise(r => { resolveRefreshRules2 = r; });
 
     (apiClient.getHealthRules as jest.Mock).mockImplementation(() => {

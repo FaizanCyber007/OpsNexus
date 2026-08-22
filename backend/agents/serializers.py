@@ -5,7 +5,7 @@ from .models import AgentProfile, AgentRun, Answer, ToolCall
 
 
 class AgentProfileSerializer(serializers.ModelSerializer):
-    class Meta:
+    class Meta:  # type: ignore
         model = AgentProfile
         fields = [
             "id",
@@ -20,7 +20,7 @@ class AgentProfileSerializer(serializers.ModelSerializer):
 
 
 class AnswerSerializer(serializers.ModelSerializer):
-    class Meta:
+    class Meta:  # type: ignore
         model = Answer
         fields = [
             "id",
@@ -43,7 +43,7 @@ class ToolCallSerializer(serializers.ModelSerializer):
     tool_input = serializers.JSONField(source="input_data", read_only=True)
     tool_output = serializers.JSONField(source="output_data", read_only=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         model = ToolCall
         fields = [
             "id",
@@ -65,7 +65,7 @@ class AgentRunSerializer(serializers.ModelSerializer):
         source="tool_calls.count", read_only=True
     )
 
-    class Meta:
+    class Meta:  # type: ignore
         model = AgentRun
         fields = [
             "id",
