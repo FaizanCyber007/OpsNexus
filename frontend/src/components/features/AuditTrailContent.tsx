@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   ShieldCheck,
   Download,
@@ -21,6 +21,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { apiClient } from "@/lib/apiClient";
 import type { AuditLog } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Modal } from "@/components/ui/Modal";
 
 function formatAction(action: string) {
   switch (action) {
@@ -45,18 +46,40 @@ export function AuditTrailContent() {
 
   const { showSuccess, showError } = useToast();
 
+  const activeReqRef = useRef({ organizationId, actionFilter });
+
+  useEffect(() => {
+    activeReqRef.current = { organizationId, actionFilter };
+  }, [organizationId, actionFilter]);
+
   const loadAuditLogs = async () => {
+    const currentReq = { organizationId, actionFilter };
     try {
       setLoading(true);
       const data = await apiClient.getAuditLogs({
-        organization: organizationId || undefined,
-        action: actionFilter !== "all" ? actionFilter : undefined,
+        organization: currentReq.organizationId || undefined,
+        action: currentReq.actionFilter !== "all" ? currentReq.actionFilter : undefined,
       });
-      setLogs(data);
+      if (
+        activeReqRef.current.organizationId === currentReq.organizationId &&
+        activeReqRef.current.actionFilter === currentReq.actionFilter
+      ) {
+        setLogs(data);
+      }
     } catch {
-      showError("Failed to fetch activity logs.");
+      if (
+        activeReqRef.current.organizationId === currentReq.organizationId &&
+        activeReqRef.current.actionFilter === currentReq.actionFilter
+      ) {
+        showError("Failed to fetch activity logs.");
+      }
     } finally {
-      setLoading(false);
+      if (
+        activeReqRef.current.organizationId === currentReq.organizationId &&
+        activeReqRef.current.actionFilter === currentReq.actionFilter
+      ) {
+        setLoading(false);
+      }
     }
   };
 
@@ -92,7 +115,7 @@ export function AuditTrailContent() {
         l.resource_id,
         l.username || "Admin",
       ]);
-      const csvContent = [headers.join(","), ...rows.map((r) => r.map((c) => `"${c}"`).join(","))].join("\n");
+      const csvContent = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
       blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       filename = `activity_report_${new Date().toISOString().split("T")[0]}.csv`;
     } else {
@@ -302,9 +325,9 @@ export function AuditTrailContent() {
       )}
 
       {/* Clean Details Modal */}
-      {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg flex flex-col rounded-2xl border border-white/[0.12] bg-[#111116] p-6 shadow-2xl space-y-4">
+      <Modal isOpen={!!selectedLog} onClose={() => setSelectedLog(null)} title="Activity Details" className="max-w-lg p-6">
+        {selectedLog && (
+          <div className="space-y-4">
             <div className="flex items-start justify-between border-b border-white/[0.08] pb-3">
               <div>
                 <h3 className="text-base font-bold text-white">
@@ -355,8 +378,8 @@ export function AuditTrailContent() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

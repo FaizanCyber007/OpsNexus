@@ -84,10 +84,29 @@ def process_next_document_task(timeout: int = 1) -> bool:
         if not item:
             return False
         _, payload_bytes = item
-        data = json.loads(payload_bytes)
+        
+        try:
+            data = json.loads(payload_bytes)
+        except json.JSONDecodeError:
+            redis_client.rpush(f"{REDIS_DOCUMENT_QUEUE_KEY}:dead_letter", payload_bytes)
+            return True
+            
         document_id = data.get("document_id")
-        if document_id:
+        if not document_id:
+            redis_client.rpush(f"{REDIS_DOCUMENT_QUEUE_KEY}:dead_letter", payload_bytes)
+            return True
+
+        try:
             process_document_task(document_id)
+        except Exception:
+            retries = data.get("retries", 0)
+            if retries < 3:
+                data["retries"] = retries + 1
+                redis_client.rpush(REDIS_DOCUMENT_QUEUE_KEY, json.dumps(data))
+            else:
+                redis_client.rpush(f"{REDIS_DOCUMENT_QUEUE_KEY}:dead_letter", payload_bytes)
+            logger.exception("Task processing failed, retrying or dead-lettering")
+            
         return True
     except Exception:
         logger.exception("Error consuming document processing task from Redis queue")

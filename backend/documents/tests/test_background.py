@@ -100,3 +100,40 @@ class TestRunMockAgentInBackground:
 
             assert result is True
             mock_processor.assert_called_once_with(str(document.id))
+
+    def test_process_next_document_task_retries_and_deadletters(self):
+        document = DocumentFactory()
+        payload = {"document_id": str(document.id), "retries": 2}
+        payload_bytes = json.dumps(payload).encode("utf-8")
+
+        with (
+            patch("documents.tasks.get_redis_connection") as mock_redis_conn,
+            patch("documents.tasks.process_document_task", side_effect=Exception("Crash")) as mock_processor,
+        ):
+            mock_client = mock_redis_conn.return_value
+            mock_client.blpop.return_value = (
+                REDIS_DOCUMENT_QUEUE_KEY,
+                payload_bytes,
+            )
+
+            result = process_next_document_task(timeout=1)
+
+            assert result is True
+            mock_processor.assert_called_once_with(str(document.id))
+            
+            assert mock_client.rpush.call_count == 1
+            args, _ = mock_client.rpush.call_args
+            assert args[0] == REDIS_DOCUMENT_QUEUE_KEY
+            p = json.loads(args[1])
+            assert p["retries"] == 3
+            
+            # Next iteration goes to dead letter
+            mock_client.rpush.reset_mock()
+            payload["retries"] = 3
+            mock_client.blpop.return_value = (
+                REDIS_DOCUMENT_QUEUE_KEY,
+                json.dumps(payload).encode("utf-8"),
+            )
+            process_next_document_task(timeout=1)
+            args, _ = mock_client.rpush.call_args
+            assert args[0] == f"{REDIS_DOCUMENT_QUEUE_KEY}:dead_letter"

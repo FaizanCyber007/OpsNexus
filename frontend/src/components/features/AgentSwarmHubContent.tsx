@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Bot,
   Zap,
@@ -65,20 +65,32 @@ export function AgentSwarmHubContent() {
   const [testResult, setTestResult] = useState<any>(null);
 
   const { showSuccess, showError } = useToast();
+  const activeOrgRef = useRef(organizationId);
+
+  useEffect(() => {
+    activeOrgRef.current = organizationId;
+  }, [organizationId]);
 
   const loadData = async () => {
+    const currentOrg = organizationId;
     try {
       setLoading(true);
       const [mcpData, runsData] = await Promise.all([
-        apiClient.getMcpTools().catch(() => ({ tools: [], server_version: "2.0.0" })),
-        apiClient.getAgentRuns().catch(() => []),
+        apiClient.getMcpTools(),
+        apiClient.getAgentRuns(),
       ]);
-      setMcpTools(mcpData.tools);
-      setAgentRuns(runsData);
+      if (activeOrgRef.current === currentOrg) {
+        setMcpTools(mcpData.tools);
+        setAgentRuns(runsData);
+      }
     } catch {
-      showError("Failed to load AI system information.");
+      if (activeOrgRef.current === currentOrg) {
+        showError("Failed to load AI system information.");
+      }
     } finally {
-      setLoading(false);
+      if (activeOrgRef.current === currentOrg) {
+        setLoading(false);
+      }
     }
   };
 

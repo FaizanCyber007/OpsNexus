@@ -71,7 +71,7 @@ flowchart TD
     end
 
     subgraph Memory["Vector Memory Layer"]
-        Extractor["Multi-Format Parser (PDF, DOCX, TXT, CSV, LOG)"]
+        Extractor["Multi-Format Parser (PDF, DOCX, TXT, CSV, LOG, MD)"]
         Embedder["Sentence-Transformers (all-MiniLM-L6-v2)"]
         Chroma[("ChromaDB (Per-Org Collections)")]
     end
@@ -193,7 +193,7 @@ OpsNexus/
 │   │   ├── layout/               # Sidebar navigation with active Framer Motion layout pill
 │   │   └── ui/                   # Card, Button, StatTile, StatusBadge, RiskBadge, ActionItemChecklist,
 │   │                             # Meter, Skeleton, Shimmer, EmptyState, ThreeBackground, Toast
-│   ├── src/contexts/             # ToastContext & notification management
+│   ├── src/contexts/             # TenantContext, ToastContext & notification management
 │   ├── src/hooks/                # useDocumentPolling for live async ingestion status
 │   ├── src/lib/                  # apiClient, TypeScript types & Zod schema definitions
 │   ├── Dockerfile                # Multi-stage production frontend container (Next.js standalone)

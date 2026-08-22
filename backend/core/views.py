@@ -157,6 +157,10 @@ class HealthRuleViewSet(AuditLogContextMixin, viewsets.ModelViewSet):
 
         org_id = self.request.query_params.get("organization")
         if org_id:
+            try:
+                uuid.UUID(str(org_id))
+            except (ValueError, AttributeError, TypeError):
+                raise exceptions.ValidationError({"organization": "Invalid UUID format."})
             queryset = queryset.filter(organization_id=org_id)
 
         return queryset
@@ -219,6 +223,10 @@ class PlaybookViewSet(AuditLogContextMixin, viewsets.ModelViewSet):
 
         org_id = self.request.query_params.get("organization")
         if org_id:
+            try:
+                uuid.UUID(str(org_id))
+            except (ValueError, AttributeError, TypeError):
+                raise exceptions.ValidationError({"organization": "Invalid UUID format."})
             queryset = queryset.filter(organization_id=org_id)
 
         return queryset
@@ -243,11 +251,27 @@ class OrganizationViewSet(AuditLogContextMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Organization.objects.filter(deleted_at__isnull=True).order_by("-created_at")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not self.request.user.is_superuser:
+            profile = getattr(self.request.user, "profile", None)
+            if profile and profile.organization:
+                queryset = queryset.filter(id=profile.organization.id)
+            else:
+                queryset = queryset.none()
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            raise exceptions.PermissionDenied("Only superusers can create new organizations.")
+        return super().create(request, *args, **kwargs)
+
 
 class SystemStatusView(APIView):
     """Health and telemetry diagnostics endpoint for OpsNexus infrastructure."""
 
-    permission_classes = [IsAuthenticated]
+    from rest_framework.permissions import IsAdminUser
+    permission_classes = [IsAdminUser]
 
     @extend_schema(
         summary="System Health & Diagnostic Telemetry",

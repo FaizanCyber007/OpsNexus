@@ -105,6 +105,8 @@ class AgentRunViewSet(AuditLogContextMixin, viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(document__organization=self.request.user.profile.organization)
         document_id = self.request.query_params.get("document")
         if document_id:
             queryset = queryset.filter(document_id=document_id)
@@ -193,9 +195,10 @@ class MCPToolsView(APIView):
 
         if tool_name == "search_company_knowledge":
             query = params.get("query", "security compliance")
-            org_id = request.data.get(
-                "organization_id", "00000000-0000-0000-0000-000000000001"
-            )
+            if request.user.is_superuser and "organization_id" in request.data:
+                org_id = request.data.get("organization_id")
+            else:
+                org_id = str(request.user.profile.organization.id)
             from memory.vector_client import ChromaDBClient
 
             client = ChromaDBClient(collection_name=f"org_{org_id}")

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -31,6 +31,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { apiClient } from "@/lib/apiClient";
 import type { Answer, Document, DocumentType } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Modal } from "@/components/ui/Modal";
 
 function displayName(filePath: string): string {
   return filePath.split("/").pop() || "Untitled document";
@@ -79,15 +80,27 @@ export function DocumentsHubContent() {
 
   const { showSuccess, showError } = useToast();
 
+  const activeOrgRef = useRef(organizationId);
+  useEffect(() => {
+    activeOrgRef.current = organizationId;
+  }, [organizationId]);
+
   const loadDocuments = async () => {
+    const requestedOrg = organizationId;
     try {
       setLoading(true);
-      const data = await apiClient.getDocuments(organizationId || undefined);
-      setDocuments(data);
+      const data = await apiClient.getDocuments(requestedOrg || undefined);
+      if (activeOrgRef.current === requestedOrg) {
+        setDocuments(data);
+      }
     } catch {
-      showError("Failed to fetch documents.");
+      if (activeOrgRef.current === requestedOrg) {
+        showError("Failed to fetch documents.");
+      }
     } finally {
-      setLoading(false);
+      if (activeOrgRef.current === requestedOrg) {
+        setLoading(false);
+      }
     }
   };
 
@@ -118,11 +131,26 @@ export function DocumentsHubContent() {
     setInspectAnswers(null);
     try {
       const ans = await apiClient.getDocumentAnswers(doc.id);
-      setInspectAnswers(ans);
+      setInspectAnswers((prevAnswers) => {
+        // Need to ensure we're still looking at the same document
+        // We use state callback to access latest inspectDoc state
+        return ans;
+      });
+      setInspectDoc((currentDoc) => {
+        if (currentDoc?.id === doc.id) {
+          setInspectAnswers(ans);
+        }
+        return currentDoc;
+      });
     } catch {
       // ignore
     } finally {
-      setInspectLoading(false);
+      setInspectDoc((currentDoc) => {
+        if (currentDoc?.id === doc.id) {
+          setInspectLoading(false);
+        }
+        return currentDoc;
+      });
     }
   };
 
@@ -311,7 +339,7 @@ export function DocumentsHubContent() {
           title="No documents found"
           description="Upload a document to get started."
           actionLabel="Upload Document"
-          onAction={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          onAction={() => window.location.href = "/dashboard"}
         />
       ) : viewMode === "table" ? (
         /* Table View */
@@ -446,7 +474,8 @@ export function DocumentsHubContent() {
                   <button
                     type="button"
                     onClick={() => handleDelete(doc.id)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-500/20 text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    disabled={deletingId === doc.id}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-500/20 text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
                     title="Delete"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -459,9 +488,9 @@ export function DocumentsHubContent() {
       )}
 
       {/* Clean Document Summary Modal */}
-      {inspectDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-white/[0.12] bg-[#111116] p-6 shadow-2xl overflow-hidden">
+      <Modal isOpen={!!inspectDoc} onClose={() => setInspectDoc(null)} title="Document Summary" className="max-w-2xl max-h-[85vh] flex flex-col p-6">
+        {inspectDoc && (
+          <>
             <div className="flex items-start justify-between border-b border-white/[0.08] pb-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -556,9 +585,9 @@ export function DocumentsHubContent() {
                 <span>Ask AI Questions</span>
               </Link>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

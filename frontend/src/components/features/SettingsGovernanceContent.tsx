@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   Building2,
@@ -24,6 +24,7 @@ import { useTenant, DEMO_ORG_ID } from "@/contexts/TenantContext";
 import { apiClient } from "@/lib/apiClient";
 import type { HealthRule, Playbook, SystemStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Modal } from "@/components/ui/Modal";
 
 export function SettingsGovernanceContent() {
   const { organizationIdDraft, organizationId, handleOrgChange, resetTenant } = useTenant();
@@ -50,21 +51,33 @@ export function SettingsGovernanceContent() {
 
   const { showSuccess, showError } = useToast();
 
+  const activeOrgRef = useRef(organizationId);
+  useEffect(() => {
+    activeOrgRef.current = organizationId;
+  }, [organizationId]);
+
   const loadAll = async () => {
+    const currentOrg = organizationId;
     try {
       setLoading(true);
       const [rules, pb, sys] = await Promise.all([
-        apiClient.getHealthRules(organizationId || undefined).catch(() => []),
-        apiClient.getPlaybooks(organizationId || undefined).catch(() => []),
+        apiClient.getHealthRules(currentOrg || undefined).catch(() => []),
+        apiClient.getPlaybooks(currentOrg || undefined).catch(() => []),
         apiClient.getSystemStatus().catch(() => null),
       ]);
-      setHealthRules(rules);
-      setPlaybooks(pb);
-      setSystemStatus(sys);
+      if (activeOrgRef.current === currentOrg) {
+        setHealthRules(rules);
+        setPlaybooks(pb);
+        setSystemStatus(sys);
+      }
     } catch {
-      showError("Failed to fetch settings.");
+      if (activeOrgRef.current === currentOrg) {
+        showError("Failed to fetch settings.");
+      }
     } finally {
-      setLoading(false);
+      if (activeOrgRef.current === currentOrg) {
+        setLoading(false);
+      }
     }
   };
 
@@ -80,11 +93,17 @@ export function SettingsGovernanceContent() {
       return;
     }
     try {
+      const parsedThreshold = parseFloat(ruleThreshold);
+      if (!Number.isFinite(parsedThreshold)) {
+        showError("Invalid threshold value.");
+        return;
+      }
+
       const created = await apiClient.createHealthRule({
         organization: organizationId || DEMO_ORG_ID,
         name: ruleName,
         metric: ruleMetric,
-        threshold: parseFloat(ruleThreshold) || 80.0,
+        threshold: parsedThreshold,
         description: ruleDesc,
         is_active: true,
       });
@@ -349,7 +368,9 @@ export function SettingsGovernanceContent() {
 
                     <div className="pt-2 border-t border-white/[0.04] flex items-center justify-between text-xs">
                       <span className="text-white/40">Threshold:</span>
-                      <span className="font-semibold text-amber-400">{rule.threshold}%</span>
+                      <span className="font-semibold text-amber-400">
+                        {rule.threshold}{rule.metric === "latency_p99" ? "ms" : "%"}
+                      </span>
                     </div>
                   </div>
 
@@ -457,9 +478,9 @@ export function SettingsGovernanceContent() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Card className="p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-emerald-400 font-semibold">AI Assistant</span>
-              <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-xs text-emerald-400 font-medium">
-                Operational
+              <span className="text-xs text-white font-semibold">AI Assistant</span>
+              <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium", systemStatus ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400" : "bg-white/10 border-white/20 text-white/50")}>
+                {systemStatus ? "Operational" : "Unknown"}
               </span>
             </div>
             <h4 className="font-bold text-sm text-white">Dual AI Model Pipeline</h4>
@@ -470,9 +491,9 @@ export function SettingsGovernanceContent() {
 
           <Card className="p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-emerald-400 font-semibold">Search & Memory</span>
-              <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-xs text-emerald-400 font-medium">
-                Operational
+              <span className="text-xs text-white font-semibold">Search & Memory</span>
+              <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium", systemStatus ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400" : "bg-white/10 border-white/20 text-white/50")}>
+                {systemStatus ? "Operational" : "Unknown"}
               </span>
             </div>
             <h4 className="font-bold text-sm text-white">Document Search Engine</h4>
@@ -483,9 +504,9 @@ export function SettingsGovernanceContent() {
 
           <Card className="p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-emerald-400 font-semibold">Data Protection</span>
-              <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-xs text-emerald-400 font-medium">
-                Protected
+              <span className="text-xs text-white font-semibold">Data Protection</span>
+              <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium", systemStatus ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400" : "bg-white/10 border-white/20 text-white/50")}>
+                {systemStatus ? "Protected" : "Unknown"}
               </span>
             </div>
             <h4 className="font-bold text-sm text-white">Encrypted Workspace Storage</h4>
@@ -497,11 +518,10 @@ export function SettingsGovernanceContent() {
       )}
 
       {/* Add Health Rule Modal */}
-      {showRuleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <Modal isOpen={showRuleModal} onClose={() => setShowRuleModal(false)} title="Create Alert Rule" className="max-w-md p-6">
           <form
             onSubmit={handleCreateRule}
-            className="w-full max-w-md rounded-2xl border border-white/[0.12] bg-[#111116] p-6 shadow-2xl space-y-4"
+            className="space-y-4"
           >
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <h3 className="font-bold text-base text-white">Create Alert Rule</h3>
@@ -579,15 +599,13 @@ export function SettingsGovernanceContent() {
               </button>
             </div>
           </form>
-        </div>
-      )}
+      </Modal>
 
       {/* Add Playbook Modal */}
-      {showPlaybookModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <Modal isOpen={showPlaybookModal} onClose={() => setShowPlaybookModal(false)} title="Create Operating Guide" className="max-w-lg p-6">
           <form
             onSubmit={handleCreatePlaybook}
-            className="w-full max-w-lg rounded-2xl border border-white/[0.12] bg-[#111116] p-6 shadow-2xl space-y-4"
+            className="space-y-4"
           >
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <h3 className="font-bold text-base text-white">Create Operating Guide</h3>
@@ -652,8 +670,7 @@ export function SettingsGovernanceContent() {
               </button>
             </div>
           </form>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }
