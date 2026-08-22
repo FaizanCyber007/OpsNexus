@@ -51,12 +51,15 @@ export function SettingsGovernanceContent() {
   const { showSuccess, showError } = useToast();
 
   const activeOrgRef = useRef(organizationId);
+  const requestGenRef = useRef(0);
+  
   useEffect(() => {
     activeOrgRef.current = organizationId;
   }, [organizationId]);
 
   const loadAll = useCallback(async () => {
     const currentOrg = organizationId;
+    const currentGen = ++requestGenRef.current;
     try {
       setLoading(true);
       const [rules, pb, sys] = await Promise.all([
@@ -64,17 +67,17 @@ export function SettingsGovernanceContent() {
         apiClient.getPlaybooks(currentOrg || undefined).catch(() => []),
         apiClient.getSystemStatus().catch(() => null),
       ]);
-      if (activeOrgRef.current === currentOrg) {
+      if (activeOrgRef.current === currentOrg && requestGenRef.current === currentGen) {
         setHealthRules(rules);
         setPlaybooks(pb);
         setSystemStatus(sys);
       }
     } catch {
-      if (activeOrgRef.current === currentOrg) {
+      if (activeOrgRef.current === currentOrg && requestGenRef.current === currentGen) {
         showError("Failed to fetch settings.");
       }
     } finally {
-      if (activeOrgRef.current === currentOrg) {
+      if (activeOrgRef.current === currentOrg && requestGenRef.current === currentGen) {
         setLoading(false);
       }
     }

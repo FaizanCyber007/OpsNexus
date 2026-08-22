@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, screen } from "@testing-library/react";
 import { AgentSwarmHubContent } from "./AgentSwarmHubContent";
 import { useTenant } from "@/contexts/TenantContext";
 import { apiClient } from "@/lib/apiClient";
@@ -18,19 +18,25 @@ jest.mock("@/contexts/ToastContext", () => ({
 
 describe("AgentSwarmHubContent", () => {
   it("prevents stale asynchronous responses from updating state after tenant changes", async () => {
-    let resolveA: (value?: unknown) => void;
-    const promiseA = new Promise((r) => { resolveA = r; });
-    
-    let resolveB: (value?: unknown) => void;
-    const promiseB = new Promise((r) => { resolveB = r; });
+    let resolveMcpA: (value?: unknown) => void;
+    const promiseMcpA = new Promise((r) => { resolveMcpA = r; });
+    let resolveMcpB: (value?: unknown) => void;
+    const promiseMcpB = new Promise((r) => { resolveMcpB = r; });
 
-    let callCount = 0;
+    let resolveRunsA: (value?: unknown) => void;
+    const promiseRunsA = new Promise((r) => { resolveRunsA = r; });
+    let resolveRunsB: (value?: unknown) => void;
+    const promiseRunsB = new Promise((r) => { resolveRunsB = r; });
+
+    let mcpCallCount = 0;
     (apiClient.getMcpTools as jest.Mock).mockImplementation(() => {
-      callCount++;
-      return callCount === 1 ? promiseA : promiseB;
+      mcpCallCount++;
+      return mcpCallCount === 1 ? promiseMcpA : promiseMcpB;
     });
+    let runsCallCount = 0;
     (apiClient.getAgentRuns as jest.Mock).mockImplementation(() => {
-      return callCount === 1 ? promiseA : promiseB;
+      runsCallCount++;
+      return runsCallCount === 1 ? promiseRunsA : promiseRunsB;
     });
 
     (useTenant as jest.Mock).mockReturnValue({ organizationId: "workspace-A" });
@@ -41,16 +47,19 @@ describe("AgentSwarmHubContent", () => {
     rerender(<AgentSwarmHubContent />);
 
     // Resolve B
-    resolveB({ tools: [{ name: "tool-b" }] }); // getMcpTools
-    resolveB([]); // getAgentRuns
+    resolveMcpB({ tools: [{ name: "tool-b" }] }); // getMcpTools
+    resolveRunsB([]); // getAgentRuns
     
     // Resolve A (stale)
-    resolveA({ tools: [{ name: "tool-a" }] });
-    resolveA([]);
+    resolveMcpA({ tools: [{ name: "tool-a" }] });
+    resolveRunsA([]);
 
     // Check that tool-a is not rendered, meaning stale response was ignored
     await waitFor(() => {
+      expect(screen.queryByText("tool-a")).toBeNull();
+      expect(screen.getByText("tool-b")).toBeTruthy();
       expect(apiClient.getMcpTools).toHaveBeenCalledTimes(2);
+      expect(apiClient.getAgentRuns).toHaveBeenCalledTimes(2);
     });
   });
 });

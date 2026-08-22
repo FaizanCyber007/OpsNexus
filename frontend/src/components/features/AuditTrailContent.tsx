@@ -45,38 +45,25 @@ export function AuditTrailContent() {
 
   const { showSuccess, showError } = useToast();
 
-  const activeReqRef = useRef({ organizationId, actionFilter });
-
-  useEffect(() => {
-    activeReqRef.current = { organizationId, actionFilter };
-  }, [organizationId, actionFilter]);
+  const requestGenRef = useRef(0);
 
   const loadAuditLogs = useCallback(async () => {
-    const currentReq = { organizationId, actionFilter };
+    const currentGen = ++requestGenRef.current;
     try {
       setLoading(true);
       const data = await apiClient.getAuditLogs({
-        organization: currentReq.organizationId || undefined,
-        action: currentReq.actionFilter !== "all" ? currentReq.actionFilter : undefined,
+        organization: organizationId || undefined,
+        action: actionFilter !== "all" ? actionFilter : undefined,
       });
-      if (
-        activeReqRef.current.organizationId === currentReq.organizationId &&
-        activeReqRef.current.actionFilter === currentReq.actionFilter
-      ) {
+      if (requestGenRef.current === currentGen) {
         setLogs(data);
       }
     } catch {
-      if (
-        activeReqRef.current.organizationId === currentReq.organizationId &&
-        activeReqRef.current.actionFilter === currentReq.actionFilter
-      ) {
+      if (requestGenRef.current === currentGen) {
         showError("Failed to fetch activity logs.");
       }
     } finally {
-      if (
-        activeReqRef.current.organizationId === currentReq.organizationId &&
-        activeReqRef.current.actionFilter === currentReq.actionFilter
-      ) {
+      if (requestGenRef.current === currentGen) {
         setLoading(false);
       }
     }

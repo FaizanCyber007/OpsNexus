@@ -19,7 +19,7 @@ class TenantScopedViewSetMixin:
         # Check if we need to filter by a different field (e.g., `document__organization`)
         filter_kwarg = getattr(self, "tenant_filter_kwarg", "organization")
         filter_id_kwarg = (
-            f"{filter_kwarg}_id" if not filter_kwarg.endswith("_id") else filter_kwarg
+            filter_kwarg if filter_kwarg == "id" or filter_kwarg.endswith("_id") else f"{filter_kwarg}_id"
         )
 
         if user.is_superuser:
@@ -36,8 +36,8 @@ class TenantScopedViewSetMixin:
 
         # Regular users can only see their own organization's data.
         profile = getattr(user, "profile", None)
-        if profile and profile.organization:
-            queryset = queryset.filter(**{filter_kwarg: profile.organization})
+        if profile and getattr(profile, "organization_id", None):
+            queryset = queryset.filter(**{filter_id_kwarg: profile.organization_id})
         else:
             queryset = queryset.none()
 
