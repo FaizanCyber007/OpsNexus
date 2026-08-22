@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Building2,
@@ -17,7 +17,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
-import { StatTile } from "@/components/ui/StatTile";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/contexts/ToastContext";
 import { useTenant, DEMO_ORG_ID } from "@/contexts/TenantContext";
@@ -56,7 +55,7 @@ export function SettingsGovernanceContent() {
     activeOrgRef.current = organizationId;
   }, [organizationId]);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     const currentOrg = organizationId;
     try {
       setLoading(true);
@@ -79,11 +78,11 @@ export function SettingsGovernanceContent() {
         setLoading(false);
       }
     }
-  };
+  }, [organizationId, showError]);
 
   useEffect(() => {
     loadAll();
-  }, [organizationId]);
+  }, [loadAll]);
 
   // Alert Rule Handlers
   const handleCreateRule = async (e: React.FormEvent) => {
@@ -223,7 +222,7 @@ export function SettingsGovernanceContent() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as "workspace" | "alerts" | "guides" | "status")}
               className={cn(
                 "relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold transition-colors",
                 isActive ? "text-white" : "text-white/50 hover:text-white/80"

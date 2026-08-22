@@ -25,7 +25,7 @@ def api_client(auth_user):
 @pytest.mark.django_db
 class TestAgentProfileViewSet:
     def test_list_agent_profiles(self, api_client):
-        profile = AgentProfileFactory(name="Supervisor Profile")
+        AgentProfileFactory(name="Supervisor Profile")
         response = api_client.get("/api/v1/agent-profiles/")
         assert response.status_code == 200
         assert len(response.data) >= 1

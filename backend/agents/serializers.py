@@ -60,9 +60,7 @@ class AgentRunSerializer(serializers.ModelSerializer):
     agent_profile_name = serializers.CharField(
         source="agent_profile.name", read_only=True
     )
-    document_name = serializers.CharField(
-        source="document.file_path", read_only=True
-    )
+    document_name = serializers.CharField(source="document.file_path", read_only=True)
     tool_calls_count = serializers.IntegerField(
         source="tool_calls.count", read_only=True
     )

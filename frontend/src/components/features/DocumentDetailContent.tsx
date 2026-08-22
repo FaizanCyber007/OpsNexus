@@ -9,8 +9,6 @@ import {
   Bot,
   FileText,
   Workflow,
-  Download,
-  ShieldCheck,
 } from "lucide-react";
 import { AgentIntelligencePanel } from "@/components/features/AgentIntelligencePanel";
 import { AgentTraceViewer } from "@/components/features/AgentTraceViewer";

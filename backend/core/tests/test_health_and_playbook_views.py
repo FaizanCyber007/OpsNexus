@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from core.factories import OrganizationFactory, UserFactory, UserProfileFactory
-from core.models import HealthRule, Playbook, UserProfile
+from core.models import HealthRule, UserProfile
 
 User = get_user_model()
 
@@ -76,7 +76,10 @@ class TestPlaybookViewSet:
 
 @pytest.mark.django_db
 class TestSystemStatusView:
-    def test_system_status_returns_operational(self, api_client):
+    def test_system_status_returns_operational(self, api_client, auth_user):
+        user, _ = auth_user
+        user.is_staff = True
+        user.save()
         response = api_client.get("/api/v1/system/status/")
         assert response.status_code == 200
         assert response.data["status"] == "operational"

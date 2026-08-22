@@ -7,10 +7,6 @@ import {
   Clock,
   CheckCircle2,
   Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  Receipt,
-  FileSpreadsheet,
   FolderOpen,
 } from "lucide-react";
 import { AnswerDisplay } from "@/components/features/AnswerDisplay";

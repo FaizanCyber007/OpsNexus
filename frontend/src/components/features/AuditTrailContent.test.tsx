@@ -17,10 +17,10 @@ jest.mock("@/contexts/ToastContext", () => ({
 
 describe("AuditTrailContent", () => {
   it("prevents obsolete requests from updating logs after organizationId changes", async () => {
-    let resolveFirstReq: any;
+    let resolveFirstReq: (value?: unknown) => void;
     const promiseFirstReq = new Promise(r => { resolveFirstReq = r; });
     
-    let resolveSecondReq: any;
+    let resolveSecondReq: (value?: unknown) => void;
     const promiseSecondReq = new Promise(r => { resolveSecondReq = r; });
 
     let callCount = 0;

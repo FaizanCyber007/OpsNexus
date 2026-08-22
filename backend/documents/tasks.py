@@ -1,14 +1,11 @@
-"""Redis-backed asynchronous task queue for document ingestion & agent execution."""
+"""RQ-backed asynchronous task queue for document ingestion & agent execution."""
 
 import asyncio
-import json
 import logging
 import uuid
-from typing import Any
 
 from django.db import connection
-from django.utils import timezone
-from django_redis import get_redis_connection
+from django_rq import job
 
 from documents.models import Document
 from memory.vector_client import ingest_document
@@ -16,10 +13,9 @@ from orchestration.agent_runner import trigger_agent_run
 
 logger = logging.getLogger(__name__)
 
-REDIS_DOCUMENT_QUEUE_KEY = "opsnexus:tasks:document_processing"
 
-
-def process_document_task(document_id: Any) -> None:
+@job("default")
+def process_document_task(document_id: str | uuid.UUID) -> None:
     """Execute vector ingestion and LangGraph agent execution for a document."""
     try:
         try:
@@ -54,60 +50,14 @@ def process_document_task(document_id: Any) -> None:
 
 
 def enqueue_document_processing(document_id: str | uuid.UUID) -> bool:
-    """Enqueue document processing task into Redis queue."""
-    doc_id_str = str(document_id)
-    payload = json.dumps(
-        {
-            "document_id": doc_id_str,
-            "enqueued_at": timezone.now().isoformat(),
-        }
-    )
-
+    """Enqueue document processing task into RQ queue."""
     try:
-        redis_client = get_redis_connection("default")
-        redis_client.rpush(REDIS_DOCUMENT_QUEUE_KEY, payload)
-        logger.info("Enqueued document processing task to Redis queue: %s", doc_id_str)
+        process_document_task.delay(document_id)
+        logger.info("Enqueued document processing task to RQ queue: %s", document_id)
         return True
     except Exception:
         logger.exception(
-            "Failed to enqueue document processing task to Redis queue: %s",
-            doc_id_str,
+            "Failed to enqueue document processing task to RQ queue: %s",
+            document_id,
         )
-        return False
-
-
-def process_next_document_task(timeout: int = 1) -> bool:
-    """Consume and execute a single document processing task from the Redis queue."""
-    try:
-        redis_client = get_redis_connection("default")
-        item = redis_client.blpop(REDIS_DOCUMENT_QUEUE_KEY, timeout=timeout)
-        if not item:
-            return False
-        _, payload_bytes = item
-        
-        try:
-            data = json.loads(payload_bytes)
-        except json.JSONDecodeError:
-            redis_client.rpush(f"{REDIS_DOCUMENT_QUEUE_KEY}:dead_letter", payload_bytes)
-            return True
-            
-        document_id = data.get("document_id")
-        if not document_id:
-            redis_client.rpush(f"{REDIS_DOCUMENT_QUEUE_KEY}:dead_letter", payload_bytes)
-            return True
-
-        try:
-            process_document_task(document_id)
-        except Exception:
-            retries = data.get("retries", 0)
-            if retries < 3:
-                data["retries"] = retries + 1
-                redis_client.rpush(REDIS_DOCUMENT_QUEUE_KEY, json.dumps(data))
-            else:
-                redis_client.rpush(f"{REDIS_DOCUMENT_QUEUE_KEY}:dead_letter", payload_bytes)
-            logger.exception("Task processing failed, retrying or dead-lettering")
-            
-        return True
-    except Exception:
-        logger.exception("Error consuming document processing task from Redis queue")
         return False

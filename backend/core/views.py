@@ -1,5 +1,3 @@
-import uuid
-
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import exceptions, viewsets
@@ -7,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.mixins import TenantScopedViewSetMixin
 from core.middleware import AuditLogContextMixin
 from core.models import AuditLog, HealthRule, Organization, Playbook
 from core.permissions import IsOrganizationAdmin
@@ -60,34 +59,19 @@ from core.serializers import (
         },  # noqa: E501
     ),
 )
-class AuditLogViewSet(AuditLogContextMixin, viewsets.ReadOnlyModelViewSet):
+class AuditLogViewSet(
+    AuditLogContextMixin, TenantScopedViewSetMixin, viewsets.ReadOnlyModelViewSet
+):
     """Read-only ViewSet for SOC2-compliant company audit logs."""
 
     serializer_class = AuditLogSerializer
     permission_classes = [IsAuthenticated, IsOrganizationAdmin]
+    queryset = AuditLog.objects.select_related("user", "organization").order_by(
+        "-timestamp"
+    )
 
     def get_queryset(self):
-        user = self.request.user
-        queryset = AuditLog.objects.select_related("user", "organization").order_by(
-            "-timestamp"
-        )
-
-        if user.is_superuser:
-            org_id = self.request.query_params.get("organization")
-            if org_id:
-                try:
-                    uuid.UUID(str(org_id))
-                except (ValueError, AttributeError, TypeError):
-                    raise exceptions.ValidationError(
-                        {"organization": "Invalid UUID format."}
-                    )
-                queryset = queryset.filter(organization_id=org_id)
-        else:
-            profile = getattr(user, "profile", None)
-            if profile and profile.organization:
-                queryset = queryset.filter(organization=profile.organization)
-            else:
-                queryset = queryset.none()
+        queryset = super().get_queryset()
 
         resource_type = self.request.query_params.get("resource_type")
         if resource_type:
@@ -136,34 +120,18 @@ class AuditLogViewSet(AuditLogContextMixin, viewsets.ReadOnlyModelViewSet):
         responses={204: None},
     ),
 )
-class HealthRuleViewSet(AuditLogContextMixin, viewsets.ModelViewSet):
+class HealthRuleViewSet(
+    AuditLogContextMixin, TenantScopedViewSetMixin, viewsets.ModelViewSet
+):
     """ViewSet for managing tenant Health Rules with SOC2 audit tracking."""
 
     serializer_class = HealthRuleSerializer
     permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        queryset = HealthRule.objects.filter(deleted_at__isnull=True).select_related(
-            "organization"
-        ).order_by("-created_at")
-
-        if user and user.is_authenticated:
-            profile = getattr(user, "profile", None)
-            if profile and profile.organization:
-                queryset = queryset.filter(organization=profile.organization)
-            elif not user.is_superuser:
-                queryset = queryset.none()
-
-        org_id = self.request.query_params.get("organization")
-        if org_id:
-            try:
-                uuid.UUID(str(org_id))
-            except (ValueError, AttributeError, TypeError):
-                raise exceptions.ValidationError({"organization": "Invalid UUID format."})
-            queryset = queryset.filter(organization_id=org_id)
-
-        return queryset
+    queryset = (
+        HealthRule.objects.filter(deleted_at__isnull=True)
+        .select_related("organization")
+        .order_by("-created_at")
+    )
 
 
 @extend_schema_view(
@@ -202,34 +170,18 @@ class HealthRuleViewSet(AuditLogContextMixin, viewsets.ModelViewSet):
         responses={204: None},
     ),
 )
-class PlaybookViewSet(AuditLogContextMixin, viewsets.ModelViewSet):
+class PlaybookViewSet(
+    AuditLogContextMixin, TenantScopedViewSetMixin, viewsets.ModelViewSet
+):
     """ViewSet for managing operational Playbooks with SOC2 audit tracking."""
 
     serializer_class = PlaybookSerializer
     permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        queryset = Playbook.objects.filter(deleted_at__isnull=True).select_related(
-            "organization"
-        ).order_by("-created_at")
-
-        if user and user.is_authenticated:
-            profile = getattr(user, "profile", None)
-            if profile and profile.organization:
-                queryset = queryset.filter(organization=profile.organization)
-            elif not user.is_superuser:
-                queryset = queryset.none()
-
-        org_id = self.request.query_params.get("organization")
-        if org_id:
-            try:
-                uuid.UUID(str(org_id))
-            except (ValueError, AttributeError, TypeError):
-                raise exceptions.ValidationError({"organization": "Invalid UUID format."})
-            queryset = queryset.filter(organization_id=org_id)
-
-        return queryset
+    queryset = (
+        Playbook.objects.filter(deleted_at__isnull=True)
+        .select_related("organization")
+        .order_by("-created_at")
+    )
 
 
 @extend_schema_view(
@@ -244,26 +196,23 @@ class PlaybookViewSet(AuditLogContextMixin, viewsets.ModelViewSet):
         responses={200: OrganizationSerializer, 404: OpenApiTypes.OBJECT},
     ),
 )
-class OrganizationViewSet(AuditLogContextMixin, viewsets.ModelViewSet):
+class OrganizationViewSet(
+    AuditLogContextMixin, TenantScopedViewSetMixin, viewsets.ModelViewSet
+):
     """ViewSet for managing tenant organizations."""
 
     serializer_class = OrganizationSerializer
     permission_classes = [IsAuthenticated]
-    queryset = Organization.objects.filter(deleted_at__isnull=True).order_by("-created_at")
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        if not self.request.user.is_superuser:
-            profile = getattr(self.request.user, "profile", None)
-            if profile and profile.organization:
-                queryset = queryset.filter(id=profile.organization.id)
-            else:
-                queryset = queryset.none()
-        return queryset
+    queryset = Organization.objects.filter(deleted_at__isnull=True).order_by(
+        "-created_at"
+    )
+    tenant_filter_kwarg = "id"
 
     def create(self, request, *args, **kwargs):
         if not request.user.is_superuser:
-            raise exceptions.PermissionDenied("Only superusers can create new organizations.")
+            raise exceptions.PermissionDenied(
+                "Only superusers can create new organizations."
+            )
         return super().create(request, *args, **kwargs)
 
 
@@ -271,6 +220,7 @@ class SystemStatusView(APIView):
     """Health and telemetry diagnostics endpoint for OpsNexus infrastructure."""
 
     from rest_framework.permissions import IsAdminUser
+
     permission_classes = [IsAdminUser]
 
     @extend_schema(
@@ -294,11 +244,16 @@ class SystemStatusView(APIView):
 
         # Check ChromaDB persistence
         from django.conf import settings
+
         chroma_dir = getattr(settings, "CHROMA_PERSIST_DIR", "")
-        chroma_status = "healthy" if chroma_dir and os.path.exists(chroma_dir) else "initialized"
+        chroma_status = (
+            "healthy" if chroma_dir and os.path.exists(chroma_dir) else "initialized"
+        )
 
         # Check LLM Keys
-        has_gemini = bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+        has_gemini = bool(
+            os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        )
         has_groq = bool(os.environ.get("GROQ_API_KEY"))
 
         data = {

@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "orchestration",
     "mcp_host",
     "memory",
+    "django_rq",
 ]
 
 MIDDLEWARE = [
@@ -197,6 +198,13 @@ CACHES = {
             "IGNORE_EXCEPTIONS": True,
         },
         "KEY_PREFIX": "opsnexus",
+    }
+}
+
+RQ_QUEUES = {
+    "default": {
+        "URL": REDIS_URL,
+        "DEFAULT_TIMEOUT": 360,
     }
 }
 

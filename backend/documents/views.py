@@ -19,6 +19,7 @@ from rest_framework.viewsets import ModelViewSet
 from agents.models import AgentRun, Answer
 from agents.serializers import AnswerSerializer
 from core.middleware import AuditLogContextMixin
+from core.mixins import TenantScopedViewSetMixin
 from core.throttling import ChatRateThrottle, DocumentUploadRateThrottle
 from orchestration.serializers import (
     DocumentChatRequestSerializer,
@@ -83,11 +84,12 @@ logger = logging.getLogger(__name__)
         },
     ),
 )
-class DocumentViewSet(AuditLogContextMixin, ModelViewSet):
+class DocumentViewSet(AuditLogContextMixin, TenantScopedViewSetMixin, ModelViewSet):
     """ViewSet for uploading, querying, and managing documents."""
 
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated]
+    tenant_filter_kwarg = "organization"
 
     def get_throttles(self):
         if getattr(self, "action", None) == "create":
@@ -108,18 +110,10 @@ class DocumentViewSet(AuditLogContextMixin, ModelViewSet):
             .annotate(latest_agent_run_id_value=Subquery(latest_agent_run))
             .order_by("-created_at")
         )
-        user = getattr(self.request, "user", None)
-        if user and user.is_authenticated:
-            org = getattr(getattr(user, "profile", None), "organization", None)
-            if org is not None:
-                queryset = queryset.filter(organization=org)
-            elif not user.is_superuser:
-                queryset = queryset.none()
 
-        organization_id = self.request.query_params.get("organization")
-        if organization_id:
-            queryset = queryset.filter(organization_id=organization_id)
-        return queryset
+        # Override self.queryset temporarily so super().get_queryset() works with our annotated base
+        self.queryset = queryset
+        return super().get_queryset()
 
     def destroy(self, request, *args, **kwargs):
         document = self.get_object()

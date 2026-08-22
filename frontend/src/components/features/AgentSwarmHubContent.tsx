@@ -1,28 +1,19 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   Bot,
-  Zap,
   Play,
   CheckCircle2,
-  Clock,
-  ArrowRight,
-  Sparkles,
   ShieldCheck,
   RefreshCw,
-  Search,
-  Receipt,
   Workflow,
-  HelpCircle,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/contexts/ToastContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { apiClient } from "@/lib/apiClient";
-import type { AgentRun, MCPToolInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const HOW_IT_WORKS_STEPS = [
@@ -54,15 +45,7 @@ const HOW_IT_WORKS_STEPS = [
 
 export function AgentSwarmHubContent() {
   const { organizationId } = useTenant();
-  const [mcpTools, setMcpTools] = useState<MCPToolInfo[]>([]);
-  const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // MCP test runner state
-  const [activeTool, setActiveTool] = useState<string>("get_internal_pricing_policy");
-  const [testQuery, setTestQuery] = useState("pricing tiers and discounts");
-  const [testRunning, setTestRunning] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
+  const [testResult, setTestResult] = useState<unknown>(null);
 
   const { showSuccess, showError } = useToast();
   const activeOrgRef = useRef(organizationId);
@@ -71,18 +54,15 @@ export function AgentSwarmHubContent() {
     activeOrgRef.current = organizationId;
   }, [organizationId]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const currentOrg = organizationId;
     try {
       setLoading(true);
-      const [mcpData, runsData] = await Promise.all([
+      await Promise.all([
         apiClient.getMcpTools(),
         apiClient.getAgentRuns(),
       ]);
-      if (activeOrgRef.current === currentOrg) {
-        setMcpTools(mcpData.tools);
-        setAgentRuns(runsData);
-      }
+      // Tools and runs fetching successful but state not needed for this UI anymore
     } catch {
       if (activeOrgRef.current === currentOrg) {
         showError("Failed to load AI system information.");
@@ -92,11 +72,11 @@ export function AgentSwarmHubContent() {
         setLoading(false);
       }
     }
-  };
+  }, [organizationId, showError]);
 
   useEffect(() => {
     loadData();
-  }, [organizationId]);
+  }, [loadData]);
 
   const handleTestMcpTool = async () => {
     setTestRunning(true);
@@ -298,7 +278,7 @@ export function AgentSwarmHubContent() {
                       Standard Pricing Tiers ({testResult.result.currency}):
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {testResult.result.tiers.map((t: any) => (
+                      {(testResult as { result: { currency: string, tiers: { name: string, price_per_month: number }[] } }).result.tiers.map((t) => (
                         <div key={t.name} className="rounded border border-white/10 bg-white/[0.02] p-2">
                           <span className="font-bold text-indigo-300 block">{t.name}</span>
                           <span className="text-xs text-white/70">${t.price_per_month} / mo</span>

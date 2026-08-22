@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   FileText,
   Search,
@@ -9,7 +10,6 @@ import {
   LayoutGrid,
   List,
   Sparkles,
-  ExternalLink,
   Trash2,
   Eye,
   RefreshCw,
@@ -72,6 +72,7 @@ export function DocumentsHubContent() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const router = useRouter();
 
   // Inspector modal state
   const [inspectDoc, setInspectDoc] = useState<Document | null>(null);
@@ -85,7 +86,7 @@ export function DocumentsHubContent() {
     activeOrgRef.current = organizationId;
   }, [organizationId]);
 
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     const requestedOrg = organizationId;
     try {
       setLoading(true);
@@ -102,11 +103,11 @@ export function DocumentsHubContent() {
         setLoading(false);
       }
     }
-  };
+  }, [organizationId, showError]);
 
   useEffect(() => {
     loadDocuments();
-  }, [organizationId]);
+  }, [loadDocuments]);
 
   const handleDelete = async (docId: string) => {
     if (!confirm("Are you sure you want to delete this document from your library?")) {
@@ -131,7 +132,7 @@ export function DocumentsHubContent() {
     setInspectAnswers(null);
     try {
       const ans = await apiClient.getDocumentAnswers(doc.id);
-      setInspectAnswers((prevAnswers) => {
+      setInspectAnswers(() => {
         // Need to ensure we're still looking at the same document
         // We use state callback to access latest inspectDoc state
         return ans;
@@ -339,7 +340,7 @@ export function DocumentsHubContent() {
           title="No documents found"
           description="Upload a document to get started."
           actionLabel="Upload Document"
-          onAction={() => window.location.href = "/dashboard"}
+          onAction={() => router.push("/dashboard")}
         />
       ) : viewMode === "table" ? (
         /* Table View */

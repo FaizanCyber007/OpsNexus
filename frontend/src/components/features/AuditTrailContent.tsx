@@ -1,27 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
   ShieldCheck,
   Download,
   Search,
   RefreshCw,
   Eye,
-  FileText,
   Lock,
   User,
   CheckCircle2,
   SlidersHorizontal,
 } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
+import { Card, CardContent } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/contexts/ToastContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { apiClient } from "@/lib/apiClient";
 import type { AuditLog } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Modal } from "@/components/ui/Modal";
 
 function formatAction(action: string) {
   switch (action) {
@@ -52,7 +51,7 @@ export function AuditTrailContent() {
     activeReqRef.current = { organizationId, actionFilter };
   }, [organizationId, actionFilter]);
 
-  const loadAuditLogs = async () => {
+  const loadAuditLogs = useCallback(async () => {
     const currentReq = { organizationId, actionFilter };
     try {
       setLoading(true);
@@ -81,11 +80,11 @@ export function AuditTrailContent() {
         setLoading(false);
       }
     }
-  };
+  }, [organizationId, actionFilter, showError]);
 
   useEffect(() => {
     loadAuditLogs();
-  }, [organizationId, actionFilter]);
+  }, [loadAuditLogs]);
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {

@@ -1,6 +1,11 @@
 import json
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.middleware import AuditLogContextMixin
+from core.mixins import TenantScopedViewSetMixin
 from .models import AgentProfile, AgentRun
 from .serializers import AgentProfileSerializer, AgentRunSerializer, ToolCallSerializer
 
@@ -27,7 +33,9 @@ from .serializers import AgentProfileSerializer, AgentRunSerializer, ToolCallSer
 class AgentProfileViewSet(AuditLogContextMixin, viewsets.ReadOnlyModelViewSet):
     """ReadOnly ViewSet for configured agent profiles and model prompts."""
 
-    queryset = AgentProfile.objects.filter(deleted_at__isnull=True).order_by("-created_at")
+    queryset = AgentProfile.objects.filter(deleted_at__isnull=True).order_by(
+        "-created_at"
+    )
     serializer_class = AgentProfileSerializer
     permission_classes = [IsAuthenticated]
 
@@ -94,19 +102,23 @@ class AgentProfileViewSet(AuditLogContextMixin, viewsets.ReadOnlyModelViewSet):
         ],
     ),
 )
-class AgentRunViewSet(AuditLogContextMixin, viewsets.ReadOnlyModelViewSet):
+class AgentRunViewSet(
+    AuditLogContextMixin, TenantScopedViewSetMixin, viewsets.ReadOnlyModelViewSet
+):
     """ViewSet for inspecting agent execution runs and tool traces."""
 
-    queryset = AgentRun.objects.filter(deleted_at__isnull=True).select_related(
-        "document", "agent_profile"
-    ).order_by("-created_at")
+    queryset = (
+        AgentRun.objects.filter(deleted_at__isnull=True)
+        .select_related("document", "agent_profile")
+        .order_by("-created_at")
+    )
     serializer_class = AgentRunSerializer
     permission_classes = [IsAuthenticated]
+    tenant_filter_kwarg = "document__organization"
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if not self.request.user.is_superuser:
-            queryset = queryset.filter(document__organization=self.request.user.profile.organization)
+
         document_id = self.request.query_params.get("document")
         if document_id:
             queryset = queryset.filter(document_id=document_id)
@@ -213,6 +225,4 @@ class MCPToolsView(APIView):
                 }
             )
 
-        return Response(
-            {"error": f"Tool '{tool_name}' not recognized."}, status=400
-        )
+        return Response({"error": f"Tool '{tool_name}' not recognized."}, status=400)

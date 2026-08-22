@@ -6,7 +6,6 @@ import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   FileText,
-  MessageSquare,
   ShieldCheck,
   Settings,
   Zap,
