@@ -16,7 +16,7 @@ User = get_user_model()
 
 @pytest.fixture
 def auth_context(db):
-    user = User.objects.create_superuser(
+    user = User.objects.create_superuser(  # type: ignore
         username="admin", password="password", email="admin@example.com"
     )
     return {"user": user}
@@ -51,7 +51,7 @@ class TestDocumentChatEndpoint:
     def test_organization_isolation_returns_404(self):
         org_a = OrganizationFactory()
         org_b = OrganizationFactory()
-        user_b = User.objects.create_user(username="user_b", password="password")
+        user_b = User.objects.create_user(username="user_b", password="password")  # type: ignore
         UserProfile.objects.create(user=user_b, organization=org_b)
 
         doc_a = DocumentFactory(organization=org_a)

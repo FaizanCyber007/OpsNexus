@@ -52,7 +52,7 @@ def _make_validation_error():
     a real human-readable message that the correction prompt will embed.
     """
     try:
-        ClassificationResult(route="invalid_route", reasoning="x")
+        ClassificationResult(route="invalid_route", reasoning="x")  # type: ignore
     except ValidationError as exc:
         return exc
     raise AssertionError("Expected ValidationError was not raised")  # pragma: no cover
@@ -91,7 +91,7 @@ class TestPydanticAutoCorrectionLoop:
             MockFactory.return_value.get_supervisor_llm.return_value = fake_llm
 
             result = asyncio.run(
-                supervisor_node({"document_text": "Please respond to this RFP."})
+                supervisor_node({"document_text": "Please respond to this RFP."})  # type: ignore
             )
 
         assert result == {"route": "sales_rfp", "reasoning": "Mentions RFP and SOC2."}
@@ -109,7 +109,7 @@ class TestPydanticAutoCorrectionLoop:
             m for m in second_call_messages if isinstance(m, HumanMessage)
         ]
         assert human_messages, "No HumanMessage found in the correction call"
-        correction_text = human_messages[-1].content
+        correction_text = str(human_messages[-1].content)
         assert "failed validation" in correction_text.lower(), (
             f"Correction prompt does not mention 'failed validation': "
             f"{correction_text!r}"
@@ -132,7 +132,7 @@ class TestPydanticAutoCorrectionLoop:
 
             with pytest.raises(ValidationError):
                 asyncio.run(
-                    supervisor_node({"document_text": "Some document with bad output."})
+                    supervisor_node({"document_text": "Some document with bad output."})  # type: ignore
                 )
 
         expected_calls = MAX_VALIDATION_LOOPS + 1
@@ -177,7 +177,7 @@ class TestPydanticAutoCorrectionLoop:
         messages_sent = second_call_input["messages"]
         human_corrections = [m for m in messages_sent if isinstance(m, HumanMessage)]
         assert human_corrections, "No HumanMessage correction found in second call"
-        assert "failed validation" in human_corrections[-1].content.lower()
+        assert "failed validation" in str(human_corrections[-1].content).lower()
 
 
 # ---------------------------------------------------------------------------

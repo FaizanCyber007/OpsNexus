@@ -30,7 +30,8 @@ is also assembled there.  This module requires no additional retry logic.
 """
 
 import logging
-from typing import Any, TypedDict
+from typing import Any
+from typing_extensions import TypedDict
 
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
@@ -151,7 +152,9 @@ async def supervisor_node(state: GraphState) -> dict:
                 )
             )
 
-    raise last_exc  # pragma: no cover — loop always raises or returns
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Unexpected failure")
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +203,7 @@ async def _run_sales_worker_agent(
     a correction `HumanMessage`, and re-invoke the agent (up to
     `MAX_VALIDATION_LOOPS` extra times).
     """
-    from langgraph.prebuilt import create_react_agent
+    from langgraph.prebuilt import create_react_agent  # type: ignore
 
     agent = create_react_agent(
         model=LLMFactory().get_worker_llm(),
@@ -247,7 +250,9 @@ async def _run_sales_worker_agent(
                 )
             )
 
-    raise last_exc  # pragma: no cover — loop always raises or returns
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Unexpected failure")
 
 
 async def sales_worker_node(state: GraphState) -> dict:

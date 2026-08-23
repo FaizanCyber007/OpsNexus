@@ -18,15 +18,15 @@ class TestClassificationResult:
 
     def test_invalid_route_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            ClassificationResult(route="not_a_real_route", reasoning="bad")
+            ClassificationResult(route="not_a_real_route", reasoning="bad")  # type: ignore
 
     def test_missing_reasoning_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            ClassificationResult(route="sales_rfp")
+            ClassificationResult(route="sales_rfp")  # type: ignore
 
     def test_missing_route_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            ClassificationResult(reasoning="Reason without route.")
+            ClassificationResult(reasoning="Reason without route.")  # type: ignore
 
     def test_invalid_json_raises_validation_error_not_uncaught_crash(self):
         with pytest.raises(ValidationError):
@@ -73,7 +73,7 @@ class TestStructuredAnswer:
 
     def test_missing_content_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            StructuredAnswer(
+            StructuredAnswer(  # type: ignore
                 executive_summary="summary",
                 risk_flags=[],
                 action_items=[],
@@ -82,7 +82,7 @@ class TestStructuredAnswer:
 
     def test_missing_executive_summary_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            StructuredAnswer(
+            StructuredAnswer(  # type: ignore
                 content="text",
                 risk_flags=[],
                 action_items=[],
@@ -91,7 +91,7 @@ class TestStructuredAnswer:
 
     def test_missing_risk_flags_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            StructuredAnswer(
+            StructuredAnswer(  # type: ignore
                 content="text",
                 executive_summary="summary",
                 action_items=[],
@@ -100,7 +100,7 @@ class TestStructuredAnswer:
 
     def test_missing_action_items_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            StructuredAnswer(
+            StructuredAnswer(  # type: ignore
                 content="text",
                 executive_summary="summary",
                 risk_flags=[],

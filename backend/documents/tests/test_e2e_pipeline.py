@@ -60,7 +60,7 @@ def api_client():
 @pytest.fixture
 def auth_context():
     org = OrganizationFactory(name="OpsNexus Enterprise Org", slug="opsnexus-ent")
-    user = User.objects.create_user(
+    user = User.objects.create_user(  # type: ignore
         username="lead_qa_user",
         email="lead_qa@opsnexus.ai",
         password="secure_password_123",
@@ -138,6 +138,7 @@ class TestFullPipelineHttpE2E:
         document = Document.objects.get(id=document_id)
         assert document.organization_id == org.id
         assert document.status == Document.Status.PENDING
+        assert document.file is not None
         assert "enterprise_security_rfp_questionnaire" in document.file.name
 
         # Simulate background processing completion and record creation

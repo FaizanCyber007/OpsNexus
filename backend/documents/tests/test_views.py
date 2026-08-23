@@ -17,7 +17,7 @@ User = get_user_model()
 @pytest.fixture
 def auth_context(db):
     org = OrganizationFactory()
-    user = User.objects.create_user(
+    user = User.objects.create_user(  # type: ignore
         username="member_user", password="password", email="member@example.com"
     )
     profile = UserProfile.objects.create(
@@ -65,8 +65,9 @@ class TestDocumentUploadEndpoint:
         document = Document.objects.get(id=response.data["document_id"])
         MockEnqueue.assert_called_once_with(document.id)
         assert document.organization_id == organization.id
+        assert document.file is not None
         assert "rfp_questionnaire" in document.file.name
-        assert document.file.name.endswith(".txt")
+        assert str(document.file.name).endswith(".txt")
         assert document.file_path == document.file.name
         assert document.status == Document.Status.PENDING
 

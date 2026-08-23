@@ -21,6 +21,7 @@ from agents.serializers import AnswerSerializer
 from core.middleware import AuditLogContextMixin
 from core.mixins import TenantScopedViewSetMixin
 from core.throttling import ChatRateThrottle, DocumentUploadRateThrottle
+from rest_framework.throttling import BaseThrottle
 from orchestration.serializers import (
     DocumentChatRequestSerializer,
     DocumentChatResponseSerializer,
@@ -91,11 +92,11 @@ class DocumentViewSet(AuditLogContextMixin, TenantScopedViewSetMixin, ModelViewS
     permission_classes = [IsAuthenticated]
     tenant_filter_kwarg = "organization"
 
-    def get_throttles(self):
+    def get_throttles(self) -> list[BaseThrottle]:
         if getattr(self, "action", None) == "create":
-            return [DocumentUploadRateThrottle()]
+            return [DocumentUploadRateThrottle()]  # type: ignore
         if getattr(self, "action", None) == "chat":
-            return [ChatRateThrottle()]
+            return [ChatRateThrottle()]  # type: ignore
         return super().get_throttles()
 
     def get_queryset(self):
