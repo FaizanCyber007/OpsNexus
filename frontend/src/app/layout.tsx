@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+
+import { ToastProvider } from "@/contexts/ToastContext";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,7 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         diff on this element, children still warn normally.
       */}
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );

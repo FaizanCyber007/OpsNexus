@@ -4,7 +4,13 @@ import { useRef, useState, type DragEvent } from "react";
 
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useToast } from "@/contexts/ToastContext";
 import { apiClient, ApiError } from "@/lib/apiClient";
+import {
+  ACCEPTED_EXTENSIONS,
+  MAX_FILE_SIZE_LABEL,
+  validateUploadFile,
+} from "@/lib/fileValidation";
 import type { Document, DocumentUploadResponse } from "@/lib/types";
 
 interface DropzoneProps {
@@ -24,17 +30,33 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
   const [isDragging, setIsDragging] = useState(false);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { showError } = useToast();
 
   async function uploadFile(file: File) {
     const id = `${file.name}-${Date.now()}`;
+
+    const validationError = validateUploadFile(file);
+    if (validationError) {
+      setUploads((prev) => [
+        ...prev,
+        { id, name: file.name, status: "error", message: validationError },
+      ]);
+      showError(`"${file.name}" — ${validationError}`);
+      return;
+    }
+
     setUploads((prev) => [...prev, { id, name: file.name, status: "uploading" }]);
 
     try {
-      const response = await apiClient.post<DocumentUploadResponse>("/documents/", {
-        organization: organizationId,
-        doc_type: docType,
-        file_path: file.name,
-      });
+      const formData = new FormData();
+      formData.append("organization", organizationId);
+      formData.append("doc_type", docType);
+      formData.append("file", file);
+
+      const response = await apiClient.post<DocumentUploadResponse>(
+        "/documents/",
+        formData,
+      );
       setUploads((prev) =>
         prev.map((item) => (item.id === id ? { ...item, status: "done" } : item)),
       );
@@ -45,6 +67,7 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
       setUploads((prev) =>
         prev.map((item) => (item.id === id ? { ...item, status: "error", message } : item)),
       );
+      showError(`Couldn't upload "${file.name}" — ${message.toLowerCase()}.`);
     }
   }
 
@@ -64,6 +87,9 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
   return (
     <div className="flex flex-col gap-4">
       <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
         onDragOver={(event) => {
           event.preventDefault();
           if (!disabled) setIsDragging(true);
@@ -71,6 +97,13 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => !disabled && inputRef.current?.click()}
+        onKeyDown={(event) => {
+          if (disabled) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
           disabled
             ? "cursor-not-allowed border-white/10 bg-white/[0.02] opacity-60"
@@ -99,16 +132,20 @@ export function Dropzone({ organizationId, docType = "other", onUploaded }: Drop
           <p className="mt-1 text-xs text-white/40">
             {disabled
               ? "Enter an Organization ID above to enable uploads"
-              : "Any file type — routed automatically by name and extension"}
+              : `${ACCEPTED_EXTENSIONS.join(", ")} — up to ${MAX_FILE_SIZE_LABEL} each`}
           </p>
         </div>
         <input
           ref={inputRef}
           type="file"
           multiple
+          accept={ACCEPTED_EXTENSIONS.join(",")}
           disabled={disabled}
           className="hidden"
-          onChange={(event) => handleFiles(event.target.files)}
+          onChange={(event) => {
+            handleFiles(event.target.files);
+            event.currentTarget.value = "";
+          }}
         />
       </div>
 

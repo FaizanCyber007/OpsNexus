@@ -4,9 +4,12 @@ import { useMemo, useState } from "react";
 
 import { AnswerDisplay } from "@/components/features/AnswerDisplay";
 import { Dropzone } from "@/components/features/Dropzone";
+import { RecentRunsTable } from "@/components/features/RecentRunsTable";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import type { Document } from "@/lib/types";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface UploadedDoc {
   id: string;
@@ -14,9 +17,18 @@ interface UploadedDoc {
 }
 
 export function DashboardContent() {
-  const [organizationId, setOrganizationId] = useState("");
+  const [organizationIdDraft, setOrganizationIdDraft] = useState("");
   const [uploads, setUploads] = useState<UploadedDoc[]>([]);
   const [statuses, setStatuses] = useState<Record<string, Document["status"]>>({});
+  const [runsVersion, setRunsVersion] = useState(0);
+
+  // Only promote the draft to the "applied" id once it's a syntactically
+  // valid UUID -- otherwise every keystroke would trigger a RecentRunsTable
+  // fetch against a partial/garbage value and prematurely enable uploads.
+  const organizationId = useMemo(() => {
+    const trimmed = organizationIdDraft.trim();
+    return UUID_PATTERN.test(trimmed) ? trimmed : "";
+  }, [organizationIdDraft]);
 
   const stats = useMemo(() => {
     const values = Object.values(statuses);
@@ -26,6 +38,15 @@ export function DashboardContent() {
       completed: values.filter((s) => s === "completed").length,
     };
   }, [uploads.length, statuses]);
+
+  function handleDeleted(documentId: string) {
+    setUploads((prev) => prev.filter((upload) => upload.id !== documentId));
+    setStatuses((prev) => {
+      const next = { ...prev };
+      delete next[documentId];
+      return next;
+    });
+  }
 
   return (
     <div className="flex w-full max-w-3xl flex-col gap-6">
@@ -46,19 +67,26 @@ export function DashboardContent() {
         <label className="flex flex-col gap-1 text-sm text-white/70">
           Organization ID
           <input
-            value={organizationId}
-            onChange={(event) => setOrganizationId(event.target.value)}
+            value={organizationIdDraft}
+            onChange={(event) => setOrganizationIdDraft(event.target.value)}
             placeholder="00000000-0000-0000-0000-000000000000"
             className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-indigo-400 focus:outline-none"
           />
         </label>
         <Dropzone
           organizationId={organizationId}
-          onUploaded={(response, fileName) =>
-            setUploads((prev) => [...prev, { id: response.document_id, fileName }])
-          }
+          onUploaded={(response, fileName) => {
+            setUploads((prev) => [...prev, { id: response.document_id, fileName }]);
+            setRunsVersion((prev) => prev + 1);
+          }}
         />
       </Card>
+
+      <RecentRunsTable
+        organizationId={organizationId}
+        refreshKey={runsVersion}
+        onDeleted={handleDeleted}
+      />
 
       {uploads.length > 0 && (
         <div className="flex flex-col gap-3">

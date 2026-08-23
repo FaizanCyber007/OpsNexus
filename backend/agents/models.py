@@ -66,6 +66,9 @@ class Answer(BaseModel):
     )
     question_text = models.TextField(blank=True)
     content = models.TextField()
+    executive_summary = models.TextField(blank=True, default="")
+    risk_flags = models.JSONField(default=list, blank=True)
+    action_items = models.JSONField(default=list, blank=True)
     confidence_score = models.FloatField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
 

@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: opsnexus
       POSTGRES_PASSWORD: opsnexus
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - opsnexus_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,8 +23,10 @@ services:
     image: redis:alpine
     container_name: opsnexus_redis
     restart: unless-stopped
-    ports:
-      - "6380:6379"
+    # No published port: nothing outside this compose network consumes Redis
+    # yet (prepping for Week 6/7 Celery), and it ships with no auth by
+    # default -- a future Celery worker connects via the internal `redis`
+    # hostname on the compose network, not a host-published port.
     volumes:
       - opsnexus_redisdata:/data
     healthcheck:
