@@ -43,22 +43,52 @@ async def mcp_session():
 async def build_mcp_tools(client: Client) -> list[Any]:
     """List the MCP server's tools and wrap each as a LangChain `@tool`."""
     from langchain_core.tools import tool
+    from mcp.types import TextContent
 
     tools_result = await client.list_tools()
     tools = []
 
     for mcp_tool in tools_result.tools:
+        name = mcp_tool.name
+        description = mcp_tool.description or name
+        input_schema = getattr(mcp_tool, "input_schema", None) or getattr(
+            mcp_tool, "inputSchema", None
+        )
 
-        def make_tool(name: str, description: str):
-            @tool(name, description=description)
+        def make_tool(t_name: str, t_description: str, t_schema: Any):
+            tool_kwargs: dict[str, Any] = {"description": t_description}
+            if (
+                t_schema is not None
+                and isinstance(t_schema, dict)
+                and t_schema.get("properties")
+            ):
+                tool_kwargs["args_schema"] = t_schema
+
+            @tool(t_name, **tool_kwargs)
             async def _call(**kwargs) -> str:
-                result = await client.call_tool(name, kwargs or {})
-                return "\n".join(
-                    block.text for block in result.content if hasattr(block, "text")
+                result = await client.call_tool(t_name, kwargs or {})
+                is_error = getattr(result, "is_error", False) or getattr(
+                    result, "isError", False
                 )
+                text_blocks = [
+                    block.text
+                    for block in result.content
+                    if isinstance(block, TextContent)
+                    or (
+                        hasattr(block, "text")
+                        and getattr(block, "type", "text") == "text"
+                    )
+                ]
+                output = "\n".join(text_blocks)
+                if is_error:
+                    err_text = output or "Tool execution failed"
+                    raise RuntimeError(
+                        f"MCP tool '{t_name}' returned an error: {err_text}"
+                    )
+                return output
 
             return _call
 
-        tools.append(make_tool(mcp_tool.name, mcp_tool.description or mcp_tool.name))
+        tools.append(make_tool(name, description, input_schema))
 
     return tools

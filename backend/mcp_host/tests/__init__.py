@@ -1,0 +1,1 @@
+# MCP host tests package

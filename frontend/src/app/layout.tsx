@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { ToastProvider } from "@/contexts/ToastContext";
+import { TenantProvider } from "@/contexts/TenantContext";
+import { ThreeBackground } from "@/components/ui/ThreeBackground";
 
 import "./globals.css";
 
@@ -16,25 +18,28 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OpsNexus",
-  description: "Autonomous document intake and resolution for B2B back-office operations.",
+  title: "OpsNexus — Autonomous Enterprise Document Intelligence",
+  description:
+    "Autonomous back-office document intake, multi-agent reasoning, semantic ChromaDB retrieval, and MCP policy enforcement.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
-      {/*
-        suppressHydrationWarning: browser extensions (Grammarly, ColorZilla, etc.)
-        inject attributes like data-gr-ext-installed / cz-shortcut-listen into body
-        before React hydrates. That's a client-only DOM mutation outside our
-        control, not a real SSR/CSR mismatch -- this only silences the attribute
-        diff on this element, children still warn normally.
-      */}
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <ToastProvider>{children}</ToastProvider>
+      <body className="min-h-full flex flex-col bg-[#09090b] text-[#f4f4f5] relative selection:bg-indigo-500/30 selection:text-white" suppressHydrationWarning>
+        <ThreeBackground />
+        <div className="relative z-10 flex min-h-screen flex-col">
+          <TenantProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </TenantProvider>
+        </div>
       </body>
     </html>
   );

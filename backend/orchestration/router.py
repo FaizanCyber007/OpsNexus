@@ -21,7 +21,12 @@ class DeterministicRouter:
     DEFAULT_ROUTE = "general_intake"
 
     def route(self, document) -> str:
-        name = os.path.basename(document.file_path).lower()
+        raw_path = (
+            getattr(document, "file_path", "")
+            or (document.file.name if getattr(document, "file", None) else "")
+            or ""
+        )
+        name = os.path.basename(raw_path).lower() if raw_path else ""
 
         for keyword, route in self.KEYWORD_ROUTES.items():
             if keyword in name:

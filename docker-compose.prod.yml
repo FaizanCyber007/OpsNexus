@@ -1,0 +1,115 @@
+name: opsnexus-prod
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ----------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: opsnexus_prod_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-opsnexus}
+      POSTGRES_USER: ${POSTGRES_USER:-opsnexus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD environment variable is required}
+    volumes:
+      - opsnexus_prod_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-opsnexus} -d ${POSTGRES_DB:-opsnexus}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opsnexus_prod_net
+
+  # ----------------------------------------------------------------------------
+  # Redis In-Memory Cache & Message Broker
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:alpine
+    container_name: opsnexus_prod_redis
+    restart: unless-stopped
+    volumes:
+      - opsnexus_prod_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opsnexus_prod_net
+
+  # ----------------------------------------------------------------------------
+  # Django REST Backend (Gunicorn + WhiteNoise)
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: opsnexus_prod_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY environment variable is required}
+      DEBUG: "False"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,0.0.0.0}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL environment variable is required}
+      REDIS_URL: redis://redis:6379/1
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      USE_S3: ${USE_S3:-False}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-}
+      AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME:-us-east-1}
+    ports:
+      - "8000:8000"
+    volumes:
+      - opsnexus_prod_mediadata:/app/media
+      - opsnexus_prod_chromadata:/app/chroma_data
+    networks:
+      - opsnexus_prod_net
+
+  # ----------------------------------------------------------------------------
+  # Next.js Frontend (Production App Router Build)
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+    container_name: opsnexus_prod_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    networks:
+      - opsnexus_prod_net
+
+# ------------------------------------------------------------------------------
+# Persistent Volumes & Network Definitions
+# ------------------------------------------------------------------------------
+volumes:
+  opsnexus_prod_pgdata:
+    driver: local
+  opsnexus_prod_redisdata:
+    driver: local
+  opsnexus_prod_mediadata:
+    driver: local
+  opsnexus_prod_chromadata:
+    driver: local
+
+networks:
+  opsnexus_prod_net:
+    driver: bridge

@@ -4,9 +4,23 @@ from rest_framework.test import APIClient
 from agents.factories import AgentRunFactory, ToolCallFactory
 
 
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+
 @pytest.fixture
-def api_client():
-    return APIClient()
+def auth_user(db):
+    return User.objects.create_superuser(
+        username="admin", password="password", email="admin@example.com"
+    )
+
+
+@pytest.fixture
+def api_client(auth_user):
+    client = APIClient()
+    client.force_authenticate(user=auth_user)
+    return client
 
 
 @pytest.mark.django_db
@@ -76,3 +90,22 @@ class TestAgentRunToolCallsEndpoint:
         )
 
         assert response.status_code == 404
+
+    def test_tool_calls_query_count_optimized(
+        self, api_client, django_assert_num_queries
+    ):
+        agent_run = AgentRunFactory()
+        for i in range(5):
+            ToolCallFactory(
+                agent_run=agent_run,
+                tool_name=f"tool_{i}",
+                input_data={"idx": i},
+                output_data={"result": i},
+            )
+
+        # 2 queries: 1 for agent_run get_object with select_related,
+        # 1 for tool_calls list with select_related
+        with django_assert_num_queries(2):
+            response = api_client.get(f"/api/agent-runs/{agent_run.id}/tool-calls/")
+            assert response.status_code == 200
+            assert len(response.data) == 5

@@ -13,8 +13,8 @@ class PendingVectorCleanup(BaseModel):
     again later instead of the failure being silently logged and discarded.
     """
 
-    document_id = models.UUIDField()
-    organization_id = models.UUIDField()
+    document_id = models.UUIDField(db_index=True)
+    organization_id = models.UUIDField(db_index=True)
     attempts = models.PositiveIntegerField(default=0)
     last_error = models.TextField(blank=True, default="")
 

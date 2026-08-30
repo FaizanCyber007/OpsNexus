@@ -5,7 +5,10 @@ import pytest
 
 from documents.factories import DocumentFactory
 from documents.models import Document
-from documents.views import _run_mock_agent_in_background
+from documents.tasks import (
+    enqueue_document_processing,
+    process_document_task,
+)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -14,10 +17,10 @@ class TestRunMockAgentInBackground:
         document = DocumentFactory()
 
         with (
-            patch("documents.views.ingest_document") as mock_ingest,
-            patch("documents.views.trigger_agent_run", AsyncMock()) as mock_trigger,
+            patch("documents.tasks.ingest_document") as mock_ingest,
+            patch("documents.tasks.trigger_agent_run", AsyncMock()) as mock_trigger,
         ):
-            _run_mock_agent_in_background(document.id)
+            process_document_task(document.id)
 
         mock_ingest.assert_called_once_with(document)
         mock_trigger.assert_awaited_once_with(document.id)
@@ -32,12 +35,12 @@ class TestRunMockAgentInBackground:
 
         with (
             patch(
-                "documents.views.ingest_document",
+                "documents.tasks.ingest_document",
                 side_effect=RuntimeError("chroma exploded"),
             ),
-            patch("documents.views.trigger_agent_run", AsyncMock()) as mock_trigger,
+            patch("documents.tasks.trigger_agent_run", AsyncMock()) as mock_trigger,
         ):
-            _run_mock_agent_in_background(document.id)
+            process_document_task(document.id)
 
         mock_trigger.assert_awaited_once_with(document.id)
 
@@ -45,13 +48,13 @@ class TestRunMockAgentInBackground:
         document = DocumentFactory()
 
         with (
-            patch("documents.views.ingest_document"),
+            patch("documents.tasks.ingest_document"),
             patch(
-                "documents.views.trigger_agent_run",
+                "documents.tasks.trigger_agent_run",
                 AsyncMock(side_effect=RuntimeError("both paths failed")),
             ),
         ):
-            _run_mock_agent_in_background(document.id)
+            process_document_task(document.id)
 
         document.refresh_from_db()
         assert document.status == Document.Status.FAILED
@@ -60,4 +63,13 @@ class TestRunMockAgentInBackground:
         fake_id = uuid.uuid4()
 
         # Should not raise -- the lookup failure must be caught and logged.
-        _run_mock_agent_in_background(fake_id)
+        process_document_task(fake_id)
+
+    def test_enqueue_document_processing_pushes_to_rq(self):
+        document = DocumentFactory()
+
+        with patch("documents.tasks.process_document_task.delay") as mock_delay:
+            result = enqueue_document_processing(str(document.id))
+
+            assert result is True
+            mock_delay.assert_called_once_with(str(document.id))

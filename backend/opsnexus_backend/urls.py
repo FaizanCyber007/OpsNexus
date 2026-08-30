@@ -21,15 +21,83 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from agents.views import AgentRunViewSet
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
+
+from agents.views import AgentProfileViewSet, AgentRunViewSet, MCPToolsView
+from core.views import (
+    AuditLogViewSet,
+    HealthRuleViewSet,
+    OrganizationViewSet,
+    PlaybookViewSet,
+    SystemStatusView,
+)
 from documents.views import DocumentViewSet
+from orchestration.views import DocumentChatView
 
 router = DefaultRouter()
 router.register(r"documents", DocumentViewSet, basename="document")
 router.register(r"agent-runs", AgentRunViewSet, basename="agent-run")
+router.register(r"agent-profiles", AgentProfileViewSet, basename="agent-profile")
+router.register(r"audit-logs", AuditLogViewSet, basename="audit-log")
+router.register(r"health-rules", HealthRuleViewSet, basename="health-rule")
+router.register(r"playbooks", PlaybookViewSet, basename="playbook")
+router.register(r"organizations", OrganizationViewSet, basename="organization")
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # OpenAPI Schema & Interactive Documentation
+    path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path(
+        "api/v1/docs/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="swagger-ui",
+    ),
+    path(
+        "api/v1/redoc/",
+        SpectacularRedocView.as_view(url_name="schema"),
+        name="redoc",
+    ),
+    path(
+        "api/v1/system/status/",
+        SystemStatusView.as_view(),
+        name="system-status-v1",
+    ),
+    path(
+        "api/system/status/",
+        SystemStatusView.as_view(),
+        name="system-status",
+    ),
+    path(
+        "api/v1/mcp-tools/",
+        MCPToolsView.as_view(),
+        name="mcp-tools-v1",
+    ),
+    path(
+        "api/mcp-tools/",
+        MCPToolsView.as_view(),
+        name="mcp-tools",
+    ),
+    path(
+        "api/v1/documents/<uuid:document_id>/chat/",
+        DocumentChatView.as_view(),
+        name="document-chat-v1",
+    ),
+    path(
+        "api/v1/documents/<str:document_id>/chat/",
+        DocumentChatView.as_view(),
+        name="document-chat-v1-str",
+    ),
+    path(
+        "api/documents/<uuid:document_id>/chat/",
+        DocumentChatView.as_view(),
+        name="document-chat",
+    ),
+    path("api/v1/", include(router.urls)),
     path("api/", include(router.urls)),
 ]
 

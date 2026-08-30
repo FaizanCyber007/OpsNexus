@@ -56,6 +56,23 @@ def capture_previous_deleted_at(sender, instance, **kwargs):
 @receiver(post_delete, sender=Document)
 def cleanup_vectors_on_hard_delete(sender, instance, **kwargs):
     _schedule_vector_cleanup(instance.id, instance.organization_id)
+    if instance.file and instance.file.name:
+        storage = instance.file.storage
+        file_name = instance.file.name
+
+        def _delete_file_from_storage():
+            try:
+                if storage.exists(file_name):
+                    storage.delete(file_name)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to delete stored file %s for document %s: %s",
+                    file_name,
+                    instance.id,
+                    exc,
+                )
+
+        transaction.on_commit(_delete_file_from_storage)
 
 
 @receiver(post_save, sender=Document)

@@ -1,6 +1,13 @@
 import { z } from "zod";
 
-export const ACCEPTED_EXTENSIONS = [".pdf", ".csv", ".xlsx"] as const;
+export const ACCEPTED_EXTENSIONS = [
+  ".pdf",
+  ".docx",
+  ".txt",
+  ".md",
+  ".csv",
+  ".log",
+] as const;
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 export const MAX_FILE_SIZE_LABEL = "10MB";
 

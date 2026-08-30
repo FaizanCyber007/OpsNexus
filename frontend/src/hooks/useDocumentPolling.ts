@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
 import { useToast } from "@/contexts/ToastContext";
 import { apiClient } from "@/lib/apiClient";
 import type { Document } from "@/lib/types";
@@ -32,7 +31,6 @@ export function useDocumentPolling(
 
     async function poll() {
       try {
-        setIsPolling(true);
         const result = await apiClient.get<Document>(`/documents/${documentId}/`);
         if (cancelled) return;
 

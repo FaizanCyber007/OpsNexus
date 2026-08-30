@@ -1,3 +1,4 @@
+# pyright: reportIncompatibleVariableOverride=false, reportIncompatibleMethodOverride=false
 import os
 
 from rest_framework import serializers
@@ -39,6 +40,18 @@ class DocumentSerializer(serializers.ModelSerializer):
             "updated_at",
             "deleted_at",
         ]
+
+    def validate_organization(self, value):
+        request = self.context.get("request")
+        if request and getattr(request, "user", None) and request.user.is_authenticated:
+            if not getattr(request.user, "is_superuser", False):
+                profile = getattr(request.user, "profile", None)
+                if not profile or profile.organization_id != value.id:
+                    raise serializers.ValidationError(
+                        "You do not have permission to upload documents to "
+                        "another organization."
+                    )
+        return value
 
     def validate_file(self, value):
         if value.size > MAX_UPLOAD_SIZE_BYTES:

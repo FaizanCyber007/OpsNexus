@@ -147,10 +147,15 @@ class ChromaDBClient:
         store = self.initialize_collection()
         store.delete(where={"document_id": document_id})
 
-    def semantic_search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
+    def semantic_search(
+        self, query: str, top_k: int = 5, document_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """Return the top_k most semantically similar chunks to `query`."""
         store = self.initialize_collection()
-        results = store.similarity_search_with_score(query, k=top_k)
+        kwargs: dict[str, Any] = {"k": top_k}
+        if document_id is not None:
+            kwargs["filter"] = {"document_id": str(document_id)}
+        results = store.similarity_search_with_score(query, **kwargs)
         return [
             {"text": doc.page_content, "metadata": doc.metadata, "distance": score}
             for doc, score in results
@@ -173,15 +178,31 @@ def extract_text(file_path: str) -> str:
     extension = os.path.splitext(file_path)[1].lower()
 
     if extension == ".pdf":
-        from langchain_community.document_loaders import PyPDFLoader
+        try:
+            from langchain_community.document_loaders import PyPDFLoader
 
-        pages = PyPDFLoader(file_path).load()
-        text = "\n".join(page.page_content for page in pages)
+            pages = PyPDFLoader(file_path).load()
+            text = "\n".join(page.page_content for page in pages)
+        except Exception:
+            logger.warning(
+                "Skipping PDF extraction for %s: unreadable or corrupt PDF",
+                file_path,
+                exc_info=True,
+            )
+            return ""
     elif extension == ".docx":
-        from langchain_community.document_loaders import Docx2txtLoader
+        try:
+            from langchain_community.document_loaders import Docx2txtLoader
 
-        pages = Docx2txtLoader(file_path).load()
-        text = "\n".join(page.page_content for page in pages)
+            pages = Docx2txtLoader(file_path).load()
+            text = "\n".join(page.page_content for page in pages)
+        except Exception:
+            logger.warning(
+                "Skipping DOCX extraction for %s: unreadable or corrupt DOCX",
+                file_path,
+                exc_info=True,
+            )
+            return ""
     else:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -205,33 +226,46 @@ def _load_document_text(file_path: str) -> list[str]:
     return _get_text_splitter().split_text(text)
 
 
-def _extract_document_chunks(document: Any) -> list[str]:
-    """Stage a Document's file to a local temp path, then extract/chunk it.
+def extract_text_from_fieldfile(field_file: Any) -> str:
+    """Stage a FieldFile to a local temp path, then extract raw text.
 
     `extract_text` needs a real filesystem path (PyPDFLoader/Docx2txtLoader
-    both require one) -- `document.file.path` only works for storage backends
+    both require one) -- `field_file.path` only works for storage backends
     with local filesystem access. `django-storages`'s `S3Storage` (wired up
     via settings.USE_S3) has no `.path` and raises `NotImplementedError`.
-    Reading through `document.file.open()`/`.chunks()` instead works
-    identically for every storage backend, local included, so this is one
-    unconditional code path rather than branching on USE_S3.
+    Reading through `field_file.open()`/`.chunks()` instead works
+    identically for every storage backend, local included, ensuring handles
+    and temporary files are always cleaned up.
     """
-    suffix = os.path.splitext(document.file.name)[1]
+    if not field_file:
+        return ""
+
+    file_name = getattr(field_file, "name", "") or "document"
+    suffix = os.path.splitext(file_name)[1]
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
 
     try:
-        document.file.open("rb")
+        field_file.open("rb")
         try:
             with open(tmp_path, "wb") as tmp:
-                for chunk in document.file.chunks():
+                for chunk in field_file.chunks():
                     tmp.write(chunk)
         finally:
-            document.file.close()
+            field_file.close()
 
-        return _load_document_text(tmp_path)
+        return extract_text(tmp_path)
     finally:
-        os.remove(tmp_path)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+def _extract_document_chunks(document: Any) -> list[str]:
+    """Extract and split document text into chunks using extract_text_from_fieldfile."""
+    text = extract_text_from_fieldfile(document.file)
+    if not text.strip():
+        return []
+    return _get_text_splitter().split_text(text)
 
 
 def ingest_document(document: Any) -> None:

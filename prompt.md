@@ -165,8 +165,8 @@ Execute sequentially and commit after each step.
      c. Model selection rationale (Free tier optimization using Groq and Gemini).
    - Action: `git commit -m "docs: generate architectural readme with model selection rationale"`
 
-3. Prompt Logging (`prompts.md`):
-   - Ensure `prompts.md` exists in the root. 
+3. Prompt Logging (`prompt.md`):
+   - Ensure `prompt.md` exists in the root. 
    - Add a detailed entry for "Phase 3: Scaffold & Architecture". Log that we used a modular, multi-app Django structure and a strictly typed Next.js component hierarchy to prepare for Agentic integration.
    - Action: `git commit -m "docs: update prompts log for week 5 scaffolding"`
 
@@ -239,7 +239,7 @@ Execute sequentially and commit after each phase.
    - Action: `git add .` && `git commit -m "chore(infra): add docker-compose for local postgres and redis scaffolding"`
 
 4. Final Rubric Verification:
-   - Append to `prompts.md`. Note that the Tool Registry, Model Client, and Memory layers were explicitly modularized to separate concerns before Week 6 feature development.
+   - Append to `prompt.md`. Note that the Tool Registry, Model Client, and Memory layers were explicitly modularized to separate concerns before Week 6 feature development.
    - Action: `git commit -m "docs: finalize week 5 stub requirements in prompt logs"`
 
 [EXECUTION CONSTRAINTS]
@@ -302,14 +302,15 @@ per-organization `Chroma` collection (`langchain-chroma`, persisted under
 `backend/chroma_data/`) embedded locally via `HuggingFaceEmbeddings`
 (`all-MiniLM-L6-v2`, `langchain-huggingface`) — no paid API calls. A new
 `ingest_document()` function extracts text (`PyPDFLoader` for `.pdf`,
-`Docx2txtLoader` for `.docx`, a plain UTF-8 read for other text-bearing files,
-skipping undecodable/binary files with a logged warning rather than failing the
-upload — confirmed with the user that ingestion should cover any file with
-extractable text, not just PDFs), splits it with `RecursiveCharacterTextSplitter`,
-and upserts the chunks into a collection named `org_<organization_id>`. This runs
-in the existing background thread in `documents/views.py`, wrapped in its own
-try/except so an ingestion failure never blocks the existing mock `AgentRun`
-pipeline, and executes before `trigger_mock_agent_run` as specified.
+`Docx2txtLoader` for `.docx`, a plain UTF-8 read for `.txt`, `.md`, `.csv`, `.log`
+and other text-bearing files, skipping undecodable/binary files with a logged
+warning rather than failing the upload — confirmed with the user that ingestion
+should cover any file with extractable text, not just PDFs), splits it with
+`RecursiveCharacterTextSplitter`, and upserts the chunks into a collection named
+`org_<organization_id>`. This runs in the existing background thread in
+`documents/views.py`, wrapped in its own try/except so an ingestion failure never
+blocks the existing mock `AgentRun` pipeline, and executes before
+`trigger_mock_agent_run` as specified.
 
 ---
 
@@ -467,7 +468,7 @@ You are the QA Lead for "OpsNexus". We are finalizing Week 6.
 2. Error Handling Audit:
    - Scan the `agent_runner.py`. Ensure `try/except` blocks wrap all LLM invocations. If Groq times out, the `Document` status must be updated to "failed", and a clean error saved to the database.
 3. Prompt Log Update:
-   - Append to `prompts.md`. Add a "Week 6: Core Feature Development" section. Log the implementation of LangGraph, the ChromaDB ingestion pipeline, and the Pytest suite.
+   - Append to `prompt.md`. Add a "Week 6: Core Feature Development" section. Log the implementation of LangGraph, the ChromaDB ingestion pipeline, and the Pytest suite.
 
 [EXECUTION CONSTRAINTS]
 Run `pytest --cov=orchestration --cov=documents` (or standard `pytest` if coverage plugin is missing) to ensure tests pass. Run `black .` and `flake8`.
@@ -620,7 +621,7 @@ You are the UX/UI Architect for "OpsNexus".
    - Use premium UI styling: e.g., a timeline view showing `[Supervisor routed to Sales Worker] -> [Sales Worker executed ChromaDB search] -> [Sales Worker called MCP Server]`.
 3. Final Polish:
    - Integrate this component into the `Customer 360` or `Dashboard` detail view.
-   - Review `prompts.md`. Append a log stating we implemented Full CRUD operations, Zod input validation, and an Agent Trace UI to finalize Week 6.
+   - Review `prompt.md`. Append a log stating we implemented Full CRUD operations, Zod input validation, and an Agent Trace UI to finalize Week 6.
 
 [EXECUTION CONSTRAINTS]
 Run `npm run lint`. Fix any TypeScript type mismatches for the new JSON logs.
@@ -700,43 +701,131 @@ You are a Lead UI/UX Architect for "OpsNexus".
 
 [EXECUTION CONSTRAINTS]
 Run `npm run lint`. Ensure the split-pane layout is fully responsive (stacks vertically on mobile, side-by-side on desktop). Maintain the premium dark-mode, glassmorphic design system.
+
+---
+
+## Prompt 17
+
+```
+[SYSTEM CONTEXT]
+You are the Lead Full-Stack Architect for "OpsNexus" (Django 5, Next.js 14).
+Stack constraint: Use `black` and `flake8` for formatting.
+Goal: Implement a Secondary AI feature and a live Multi-Model comparison tool.
+
+[YOUR TASK: INTERACTIVE RAG & MODEL ARENA]
+1. Backend Endpoint (`orchestration/views.py`):
+   - Build a `POST /api/v1/documents/{id}/chat/` endpoint.
+   - It must take a user's question, run semantic search on ChromaDB for that specific document, and route the prompt to an LLM to generate an answer.
+   - Implement Multi-Model Routing: If the request payload includes `compare=true`, the backend must execute the request asynchronously on TWO models simultaneously: `Groq (Llama-3 70B)` and `Gemini Flash`. Return both responses and their execution times.
+2. Frontend UI (`app/dashboard/document/[id]/page.tsx`):
+   - Build an interactive "Document Chat" tab next to the PDF viewer.
+   - Add a "Model Arena" toggle switch. When enabled, the chat window splits into two columns. 
+   - When the user asks a question, show elegant, independent loading states (shimmer effects) for Groq and Gemini. Render their responses side-by-side with a badge showing which model answered faster.
+3. UX Polish:
+   - Ensure "empty states" (no messages yet) look beautiful with prompt suggestions. Add clear error toasts if an API times out.
+
+[EXECUTION CONSTRAINTS]
+Ensure zero code redundancy. Update `apiClient.ts` to handle the new comparison payload. Commit using `git commit -m "feat: implement interactive document RAG and multi-model arena comparison"`.
+
+---
+
+## Prompt 18
+
+```
+[SYSTEM CONTEXT]
+You are the Principal AI Engineer for "OpsNexus".
+Goal: Harden the main LangGraph Agent with strict output validation, retry logic, and fallback handling.
+
+[YOUR TASK: PRODUCTION GUARDRAILS]
+1. Tenacity Retry Logic:
+   - Install `tenacity`.
+   - Wrap our LLM invocation calls (especially the tool-calling nodes) with exponential backoff retries (max 3 attempts). Catch `RateLimitError` and `ServiceUnavailable` errors specifically.
+2. Pydantic Output Validation & Auto-Correction:
+   - Use `with_structured_output(Schema)` on our final answer generation node.
+   - If the LLM generates invalid JSON or violates the Pydantic schema, catch the `ValidationError`. Do NOT crash. Catch the error message, feed it back to the LLM as a `HumanMessage` saying "Your output failed validation: {error}. Please correct it.", and loop back to the node (max 2 loops).
+3. Provider Fallback Handling:
+   - Implement `.with_fallbacks()` on the main Groq LLM chain. If Groq goes down completely, the LangGraph agent must seamlessly fall back to Gemini to complete the task.
+
+[EXECUTION CONSTRAINTS]
+Run `black` and `flake8`. Write a unit test mocking a validation failure to prove the auto-correction loop works. Commit using `git commit -m "refactor: add tenacity retries, pydantic auto-correction loops, and LLM fallbacks"`.
 ```
 
 ---
 
-### Prompts 14-16: Memory Sync, Structured Output, Split-Pane UI
+## Prompt 19
 
-Summary of what Prompts 14-16 actually built, and the known gaps left open rather
-than papered over:
+```
+[SYSTEM CONTEXT]
+You are the API Architect for "OpsNexus".
+Goal: Optimize database queries, implement caching, and generate the OpenAPI spec.
 
-- **ChromaDB desync fix (`documents/signals.py`).** `post_delete` (hard delete) and
-  `post_save` (soft delete) both call `ChromaDBClient.delete_by_document_id`,
-  deferred via `transaction.on_commit` so a later rollback can't leave a Postgres
-  row intact but its vectors already gone. Soft-delete detection compares the row's
-  `deleted_at` before/after `.save()` (a `pre_save` snapshot) rather than trusting
-  the caller to pass `update_fields=["deleted_at"]`, so any save path -- the DRF
-  `destroy()` action, Django admin, a shell one-liner -- triggers cleanup correctly.
-  A Chroma-side failure is logged, not raised, so it can't fail the delete itself --
-  but there's no retry or reconciliation job for a failed cleanup; a Chroma outage
-  at the exact moment of deletion can still leave orphaned vectors that nothing
-  automatically re-attempts. That's a real, known gap, not solved here.
-- **Cloud storage abstraction (`settings.py`).** `USE_S3` toggles `STORAGES["default"]`
-  between `FileSystemStorage` (local dev) and `django-storages`'s `S3Storage`; the
-  `AWS_*` env vars have no default, so a misconfigured `USE_S3=True` fails loudly at
-  startup instead of silently misbehaving. `memory/vector_client.py`'s
-  `ingest_document` was updated to read files via the storage-agnostic
-  `document.file.open()`/`.chunks()` API instead of `document.file.path` --
-  `S3Storage` has no `.path` and raises `NotImplementedError`, which would have
-  silently broken ingestion the moment `USE_S3=True` without this fix.
-- **Granular structured output.** `StructuredAnswer` (`orchestration/schemas.py`)
-  and the `Answer` model both carry `executive_summary`/`risk_flags`/`action_items`
-  now. `risk_flags` is a plain `list[str]` with no severity field -- the frontend
-  renders every flag with the same (red) styling rather than a fabricated red/yellow
-  split the schema has no data to support. Adding real severity would mean a schema
-  + migration + serializer + frontend-type change across the stack, not a small fix.
-- **Split-pane document detail page.** The file URL embedded in the left pane
-  (`document.file`, DRF's absolute `FileField` URL) is served with no
-  authentication or authorization check -- this app has no auth system anywhere yet
-  (every endpoint is open), a pre-existing gap from before this task, not something
-  newly introduced. Anyone who knows or guesses a document's UUID can view its file
-  and answers. Worth a dedicated task once auth exists at all.
+[YOUR TASK: PERFORMANCE & DOCUMENTATION]
+1. Query Optimization (N+1 Fixes):
+   - Audit all Django ViewSets (Documents, AgentRuns, ToolCalls). 
+   - Add `.select_related()` and `.prefetch_related()` where necessary. Add `db_index=True` to heavily filtered models (`organization_id`, `status`, `created_at`).
+2. Semantic Caching (Redis):
+   - Ensure `django-redis` is installed. 
+   - Cache the responses of the new `/chat/` endpoint for 15 minutes. If a user asks the exact same question on the exact same document, return the cached result immediately.
+3. OpenAPI Specification:
+   - Configure `drf-spectacular` in `settings.py`.
+   - Ensure the Swagger UI is exposed at `/api/v1/docs/`.
+   - Add detailed docstrings, `@extend_schema`, and example Pydantic responses to our critical APIs (Upload, Chat, Runs) so the auto-generated documentation is pristine.
+
+[EXECUTION CONSTRAINTS]
+Run `pytest` to ensure caching didn't break functionality. Commit using `git commit -m "perf: optimize db queries, add redis caching, and generate OpenAPI specs"`.
+```
+
+---
+
+## Prompt 20
+
+```
+[SYSTEM CONTEXT]
+You are the Lead Security & DevOps Architect for "OpsNexus".
+Stack: Django 5, DRF, PostgreSQL. (Linter: `black` and `flake8`).
+Goal: Implement production hardening, rate-limiting, and SOC2-compliant audit logging. (Do not implement Week 8 deployment tasks yet).
+
+[YOUR TASK: ENTERPRISE SECURITY & OBSERVABILITY]
+1. API Rate Limiting (Throttling):
+   - We are using free AI APIs (Groq/Gemini). We must protect our endpoints from abuse.
+   - Configure DRF native throttling (`AnonRateThrottle`, `UserRateThrottle`) in `settings.py`.
+   - Apply stricter custom throttling (e.g., max 5 requests per minute) specifically to the `/documents/` upload and `/chat/` endpoints to protect the LangGraph execution layer.
+2. Django Security Headers:
+   - Configure production security settings in `settings.py`: `SECURE_BROWSER_XSS_FILTER`, `SECURE_CONTENT_TYPE_NOSNIFF`, `X_FRAME_OPTIONS`, and `CSRF_COOKIE_HTTPONLY`.
+3. SOC2 Audit Trail (Observability):
+   - B2B platforms require audit logs. Create an `AuditLog` model in the `core` app (Fields: `user_id`, `action`, `resource_type`, `resource_id`, `timestamp`, `ip_address`).
+   - Implement a Django signal or middleware that automatically creates an `AuditLog` record whenever an Organization Admin creates, updates, or deletes a `HealthRule`, `Playbook`, or `Document`.
+   - Expose a read-only `GET /api/v1/audit-logs/` endpoint for Organization Admins to view their company's history.
+
+[EXECUTION CONSTRAINTS]
+Run `black .` and `flake8`. Write a unit test verifying that a 429 Too Many Requests status code is returned when the throttle limit is exceeded. Commit using `git commit -m "feat: implement API throttling, security headers, and SOC2 audit logging"`.
+
+---
+
+## Prompt 21
+
+```
+[SYSTEM CONTEXT]
+You are a Principal UI/UX Designer and Frontend Architect for "OpsNexus".
+Stack: Next.js 14, Tailwind CSS, Framer Motion, TypeScript, Lucide Icons.
+Goal: Completely overhaul the UI/UX to match top-tier 2026 B2B SaaS platforms. 
+
+[YOUR TASK: PREMIUM UI/UX OVERHAUL & STATE MANAGEMENT]
+1. Design Research & Benchmarking:
+   - Search the web for the latest UI/UX design principles used by elite developer and B2B tools (e.g., Linear, Vercel, Stripe, Supabase). 
+   - AVOID generic "AI-generated" designs (no massive blue buttons, no flat gray backgrounds, no excessive padding that wastes screen real estate).
+2. Global Theme Redesign:
+   - Implement a deeply premium Dark Mode aesthetic. Backgrounds should be near-black (e.g., `#0A0A0A` or `#09090B`). Use subtle 1px borders (`border-white/10`) for cards and tables.
+   - Use Glassmorphism (`backdrop-blur-md`, `bg-black/50`) for sticky headers, modals, and dropdowns.
+   - Standardize typography using a sleek, modern sans-serif font (like Inter or Geist). Ensure high data density for tables (smaller text, compact padding) so RevOps users can see a lot of data at once.
+3. Advanced State Management (Rubric Requirement):
+   - Empty States: Redesign all empty tables/dashboards. Instead of a blank screen, create beautiful "Empty State" illustrations or dashed-border dropzones with clear Call-to-Action buttons (e.g., "No Health Rules found. Click here to generate your first rule using AI.").
+   - Loading States: Strip out basic CSS spinners. Implement highly polished Shimmer/Skeleton loaders that match the exact shape of the data being fetched. 
+   - Error States: Redesign error boundaries and Toast notifications. They should be sleek, slide in via Framer Motion, and provide actionable fixes (not just raw API error text).
+4. Micro-Interactions & 3D Polish:
+   - Add subtle Framer Motion hover effects to buttons and table rows (e.g., `scale: 0.99` on click, slight background brightening on hover).
+   - Ensure the `@react-three/fiber` background element on the login/landing page blends seamlessly with this new dark aesthetic, acting as a subtle, high-end visual anchor.
+
+[EXECUTION CONSTRAINTS]
+Scan all components in `src/components/`. Refactor them to use a unified Tailwind config (consider setting up specific semantic colors in `tailwind.config.ts` like `background`, `border`, `muted`, `accent`). Run `npm run lint`. 
+Commit using `git commit -m "style: overhaul UI/UX to premium enterprise B2B aesthetic with advanced state management"`.

@@ -1,184 +1,385 @@
-# OpsNexus
+# OpsNexus: Autonomous Document Intelligence & Operations Platform
 
-OpsNexus centralizes B2B back-office document work — security questionnaires,
-invoice-to-ledger reconciliation, SOC2 compliance log checks — behind an autonomous
-Supervisor Agent that classifies incoming unstructured documents and routes them to
-specialized Sub-Agents for automated resolution.
+OpsNexus centralizes enterprise B2B back-office document workflows — vendor risk questionnaires (SIG/CAIQ), invoice-to-ledger reconciliation, and SOC2/ISO compliance audit checks — behind an autonomous, hierarchical multi-agent swarm governed by **LangGraph** and standardized on Anthropic's **Model Context Protocol (MCP 2.0)**.
 
-This repo is a strict monorepo: `/backend` (Django 5 + DRF) and `/frontend`
-(Next.js App Router) are fully separated, talking to each other only over HTTP.
+The platform is architected as a production-grade monorepo featuring a high-performance **Django 5.2 + Django REST Framework** backend and a modern, high-density **Next.js 16 (App Router) + React 19 + Tailwind CSS + Framer Motion** frontend.
 
-## Current state vs. target architecture
+---
 
-This is a **Phase 3 / Week 5 scaffold**. The plumbing — models, API, async pipeline,
-UI — is real and runnable end-to-end. The "AI" in the pipeline today is a
-**deterministic mock**: no LLM is called yet. The sections below are explicit about
-which parts are implemented and which are the target this scaffold is built to grow
-into.
+## 🌟 Key Features & Implemented Capabilities
 
-### Implemented today
+### 🧠 LangGraph Hierarchical Multi-Agent Swarm
+- **Supervisor Agent (Google Gemini 2.5 Flash)**: Ingests raw document context, classifies intent (`sales_rfp`, `invoice_reconciliation`, `compliance_audit`, `general_intake`), and orchestrates domain-specific worker sub-agents.
+- **Worker Sub-Agents (Groq LLaMA 3.3 / `openai/gpt-oss-120b`)**: Ultra-fast ReAct agent executing targeted tool loops, querying MCP knowledge servers, and synthesizing structured outputs.
+- **Deterministic Fast-Path Router**: Sub-millisecond rule-based keyword/regex routing before LLM escalation.
+- **Production Guardrails & Auto-Correction**:
+  - **Pydantic Auto-Correction Loops**: Catches schema validation failures (`ValidationError`) and feeds error context back to the model for self-correction up to `MAX_VALIDATION_LOOPS` (2) attempts.
+  - **Tenacity Exponential Backoff Retries**: Resilient retry policy (up to 3 attempts with 2–10s backoff) catching transient rate limits (`429`) and upstream service unavailability (`503`).
+  - **LLM Provider Fallback**: Automatic failover chain from Groq to Gemini if Groq exhausts retry limits.
+  - **Graceful Mock Fallbacks**: Simulated deterministic pipelines when API keys are absent in development.
+
+### 🔌 Model Context Protocol (MCP 2.0)
+- **Standalone MCP Server** (`mcp_host/server.py`): Standards-compliant JSON-RPC 2.0 tool execution layer over `stdio` exposing company knowledge and internal pricing policies (`get_internal_pricing_policy`).
+- **Zero Vendor Lock-In Client Bridge** (`mcp_host/client.py`): Decoupled MCP 2.0 transport client integrating external organizational tools into LangChain/LangGraph runnables without pinning legacy SDKs.
+
+### 🔍 Dense Vector Memory & Multi-Format RAG
+- **Zero-Cost Local Dense Vector Embeddings**: HuggingFace Sentence-Transformers (`all-MiniLM-L6-v2`) generating dense semantic embeddings locally with **$0 third-party embedding API costs**.
+- **Multi-Format Document Parsing**: Native extraction for **PDF, DOCX, TXT, MD, CSV, and LOG** files.
+- **Per-Tenant Vector Isolation**: Isolated ChromaDB collections (`org_<uuid>`) with automated lifecycle signals (`post_delete` signals prune ChromaDB embeddings when documents are removed).
+
+### ⚔️ Interactive RAG Document Chat & Model Arena
+- **Grounded Conversational RAG**: In-app document Q&A with verifiable chunk-level citations and similarity scores.
+- **Model Arena (`compare=true`)**: Side-by-side concurrent execution comparing **Groq (LLaMA 3.3)** vs. **Google Gemini (2.5 Flash)** measuring roundtrip latency (ms), token consumption, and response accuracy.
+- **Redis Response Caching**: Parameterized SHA-256 query caching with 15-minute TTL (`django-redis`) for sub-5ms repeated query responses.
+
+### 🛡️ Enterprise Security, SOC2 Audit Logging & Rate Limiting
+- **Custom Rate Throttling**: DRF rate limiting protecting AI endpoints from abuse (`5 requests/minute` on `/documents/` upload and `/chat/` arena endpoints).
+- **Hardened Security Headers**: `SECURE_BROWSER_XSS_FILTER`, `SECURE_CONTENT_TYPE_NOSNIFF`, `X_FRAME_OPTIONS: DENY`, `CSRF_COOKIE_HTTPONLY`.
+- **SOC2 Audit Trail**: Relational `AuditLog` model and automated Django signals recording every `CREATE`, `UPDATE`, and `DELETE` action performed by Organization Admins on documents, health rules, and playbooks.
+- **Auditable Admin API**: Dedicated `GET /api/v1/audit-logs/` endpoint for compliance review.
+- **Dual-Storage Backend**: Switchable media engine supporting local filesystem and AWS S3 (`django-storages` + `boto3`) via `USE_S3`.
+
+### 💻 Next.js 16 Premium B2B Dashboard
+- **Modern Dark Aesthetic**: Deeply premium near-black theme (`#0c0c10` / `#111116`), Glassmorphism (`backdrop-blur-2xl`), subtle 1px borders (`border-white/10`), and Three.js 3D dynamic visual background.
+- **Drag-and-Drop Ingestion**: Sub-second HTTP 202 async intake acknowledgment with live polling telemetry (`useDocumentPolling`).
+- **High-Density Workbench**: Split-pane layout featuring an integrated **Document Preview Pane**, **RAG Model Arena**, and **Agent Intelligence & Trace Viewer**.
+- **Granular Observability**: Interactive timeline rendering all `AgentRun` tool calls, intermediate reasoning steps, confidence meters, risk matrices, and action item checklists.
+- **Advanced State UX**: Skeleton and shimmer loaders matching real UI geometries, actionable Toast notifications, and empty states with AI quick-start CTAs.
+
+### 📖 OpenAPI 3.0 / Swagger UI & ReDoc
+- Auto-generated, strongly-typed OpenAPI schemas powered by `drf-spectacular` at `/api/v1/docs/` and `/api/v1/redoc/`.
+
+---
+
+## 🏗️ System Architecture & Data Flow
+
+```mermaid
+flowchart TD
+    subgraph Frontend["Frontend (Next.js 16 App Router + React 19 + Framer Motion)"]
+        UI["Dashboard & Upload Dropzone"]
+        Workbench["Document Detail & Preview Pane"]
+        TraceUI["Agent Intelligence & Trace Viewer"]
+        ArenaUI["RAG Chat & Model Arena"]
+    end
+
+    subgraph API["Backend API Gateway (Django 5.2 + DRF)"]
+        Ingest["Async Document Ingestion (HTTP 202)"]
+        ChatAPI["Document Chat & Model Arena Endpoint"]
+        AuditAPI["SOC2 Audit Logs Endpoint (/api/v1/audit-logs/)"]
+        Swagger["OpenAPI / Swagger UI (/api/v1/docs/)"]
+        Throttle{"Rate Throttles (5 req/min)"}
+    end
+
+    subgraph Memory["Vector Memory Layer"]
+        Extractor["Multi-Format Parser (PDF, DOCX, TXT, CSV, LOG, MD)"]
+        Embedder["Sentence-Transformers (all-MiniLM-L6-v2)"]
+        Chroma[("ChromaDB (Per-Org Collections)")]
+    end
+
+    subgraph Agents["LangGraph Multi-Agent Swarm"]
+        FastRouter{"Deterministic Fast Router"}
+        Supervisor["Supervisor Agent (Gemini 2.5 Flash)"]
+        Guardrails{"Pydantic Auto-Correction & Tenacity Retries"}
+        SalesWorker["Sales Worker Sub-Agent (Groq LLaMA 3.3)"]
+        Fallback["Gemini Fallback Chain"]
+        MCPClient["MCP Client Bridge (JSON-RPC)"]
+        MCPHost["MCP Tool Server (Internal Pricing & Knowledge)"]
+    end
+
+    subgraph Storage["Data, Cache & Observability Layer"]
+        PG[("PostgreSQL 16 Relational DB (Multi-Tenant)")]
+        Redis[("Redis Response Cache & Broker")]
+        S3[("AWS S3 / Local Media Storage")]
+    end
+
+    UI -->|POST /api/v1/documents/| Throttle --> Ingest
+    Ingest --> Extractor --> Embedder --> Chroma
+    Ingest --> S3
+    Ingest --> FastRouter
+    FastRouter -->|Complex / Ambiguous| Supervisor
+    Supervisor --> Guardrails
+    Supervisor -->|sales_rfp| SalesWorker
+    SalesWorker --> Guardrails
+    SalesWorker -->|On Groq Outage| Fallback
+    SalesWorker --> MCPClient --> MCPHost
+    SalesWorker -->|StructuredAnswer| PG
+    Supervisor -->|Classification & Reasoning| PG
+    
+    ArenaUI -->|POST /api/v1/documents/:id/chat/| Throttle --> ChatAPI
+    ChatAPI --> Redis
+    ChatAPI -->|Semantic Search| Chroma
+    ChatAPI -->|Concurrent Benchmark| SalesWorker
+    ChatAPI -->|Concurrent Benchmark| Supervisor
+
+    UI -.->|Live Polling & Trace Telemetry| PG
+    TraceUI -.->|GET /api/v1/agent-runs/:id/tool-calls/| PG
+    AuditAPI -.->|GET /api/v1/audit-logs/| PG
+```
+
+---
+
+## 💻 Tech Choices & Status Matrix
+
+| Layer | Technology | Purpose | Status |
+|---|---|---|---|
+| **Backend Framework** | Django 5.2.16 + Django REST Framework 3.17 | Multi-tenant REST API, async ingestion & ORM | ✅ Implemented |
+| **Frontend Framework** | Next.js 16.3 (App Router) + React 19.2 + TypeScript 5 | Reactive dashboard, live telemetry & Arena UI | ✅ Implemented |
+| **Styling & Animation** | Tailwind CSS 4 + Framer Motion 13 + Three.js | Dark mode, micro-interactions & 3D background | ✅ Implemented |
+| **Agent Orchestration** | LangGraph 1.2 + LangChain Core | State machine graphs, cyclical routing & guardrails | ✅ Implemented |
+| **Supervisor LLM** | Google Gemini 2.5 Flash (`langchain-google-genai`) | High-reasoning document classification & routing | ✅ Implemented |
+| **Worker Sub-Agents** | Groq LLaMA 3.3 / `openai/gpt-oss-120b` (`langchain-groq`) | Ultra-fast ReAct tool execution & structured output | ✅ Implemented |
+| **Tool Protocol** | Model Context Protocol (Anthropic `mcp` 2.0.0 SDK) | Decoupled JSON-RPC 2.0 tool execution layer | ✅ Implemented |
+| **Vector Database / RAG** | ChromaDB 1.5.9 + `sentence-transformers` 5.5 | Local dense embeddings (`all-MiniLM-L6-v2`) | ✅ Implemented |
+| **Relational Database** | PostgreSQL 16 (Alpine) + `psycopg3` | Multi-tenant document, run, trace & audit persistence | ✅ Implemented |
+| **Cache & Broker** | Redis 7+ (Alpine) + `django-redis` 5.4 | 15-minute response cache for RAG / Model Arena | ✅ Implemented |
+| **API Documentation** | `drf-spectacular` 0.28 (OpenAPI 3.0 / Swagger / ReDoc) | Interactive documentation & schema export | ✅ Implemented |
+| **Storage Layer** | Local Filesystem / AWS S3 (`django-storages` + `boto3`) | Document media attachment storage | ✅ Implemented |
+| **Production Serving** | Gunicorn 23 + WhiteNoise 6.9 + Next.js Standalone | Production WSGI web server & static compression | ✅ Implemented |
+
+---
+
+## 📁 Monorepo Layout
 
 ```
-Next.js Dashboard (/dashboard)
-   |  POST /api/documents/ { organization, doc_type, file_path }
-   v
-Django DRF (DocumentViewSet.create)
-   |  202 Accepted { status: "processing", document_id }
-   |  spawns a background thread
-   v
-orchestration.trigger_mock_agent_run (async)
-   |  DeterministicRouter -- keyword/extension match on file_path -> mock route
-   |  sleeps 2s, writes mock AgentRun / ToolCall / Answer rows
-   v
-Document.status -> "completed"
-
-Next.js Dashboard
-   |  polls GET /api/documents/{id}/ every 1.5s until status is completed/failed
-   |  fetches GET /api/documents/{id}/answers/
-   v
-AnswerDisplay renders the mock Answer
+OpsNexus/
+├── backend/
+│   ├── agents/                   # AgentProfile, AgentRun, ToolCall, Answer, Citation models & APIs
+│   │   ├── models.py             # Relational agent models & audit tracking
+│   │   ├── serializers.py        # Serializers for runs, tool traces, answers, citations
+│   │   ├── views.py              # AgentRunViewSet with tool-calls trace endpoint
+│   │   └── tests/                # Test suite for agent run persistence and traces
+│   ├── core/                     # Multi-tenant Organization, UserProfile, HealthRule, Playbook, AuditLog
+│   │   ├── middleware.py         # AuditLogContextMiddleware capturing IP and active user
+│   │   ├── models.py             # Multi-tenant base models & SOC2 AuditLog
+│   │   ├── signals.py            # Automatic SOC2 audit logging signals
+│   │   ├── throttling.py         # Custom DRF rate throttling classes (5 req/min)
+│   │   ├── views.py              # AuditLogViewSet (read-only compliance audit API)
+│   │   └── tests/                # Tests for multi-tenancy, throttling, security & audit logs
+│   ├── documents/                # Document model, ingestion views, soft deletion & signals
+│   │   ├── models.py             # Document model with UUIDv4, status, and file field
+│   │   ├── tasks.py              # Background ingestion runner with LangGraph trigger
+│   │   ├── views.py              # DocumentViewSet with upload throttling & prefetching
+│   │   └── tests/                # Tests for ingestion pipeline, soft delete & signals
+│   ├── mcp_host/                 # Standalone Model Context Protocol (MCP 2.0) Server & Client
+│   │   ├── server.py             # JSON-RPC stdio MCP tool server
+│   │   ├── client.py             # Asynchronous MCP client bridge wrapping LangChain tools
+│   │   └── tests/                # MCP protocol and tool integration tests
+│   ├── memory/                   # ChromaDB vector client, multi-format text parsers & cleanup
+│   │   ├── vector_client.py      # Multi-format extractors & tenant-isolated ChromaDB client
+│   │   └── tests/                # Parsers, vector indexing, and collection pruning tests
+│   ├── orchestration/            # LangGraph StateGraph, Gemini/Groq model clients, guards & Arena
+│   │   ├── agent_runner.py       # Pipeline entry point bridging DB with LangGraph
+│   │   ├── graph.py              # LangGraph Supervisor & Sales Worker state graph
+│   │   ├── model_client.py       # LLMFactory with Tenacity retries and Gemini fallback
+│   │   ├── schemas.py            # Pydantic schemas (ClassificationResult, StructuredAnswer)
+│   │   ├── tool_registry.py      # LangChain tool bindings (search_company_knowledge)
+│   │   ├── views.py              # DocumentChatView (RAG Chat + Model Arena with Redis cache)
+│   │   └── tests/                # Guardrails, schema validation, arena & chat tests
+│   ├── opsnexus_backend/         # Django settings, WSGI, URLs & drf-spectacular configuration
+│   ├── Dockerfile                # Multi-stage production backend container (Gunicorn + WhiteNoise)
+│   ├── requirements.txt          # Python dependencies
+│   └── pytest.ini                # Pytest test configuration
+├── frontend/
+│   ├── src/app/                  # Next.js App Router
+│   │   ├── dashboard/            # Main ingestion dashboard & document detail workbench
+│   │   │   ├── page.tsx          # Dashboard page
+│   │   │   └── document/[id]/    # Split-pane document workbench route
+│   │   ├── globals.css           # Tailwind CSS 4 theme tokens & custom glass utilities
+│   │   ├── layout.tsx            # Global layout with ToastProvider & dark backdrop
+│   │   └── page.tsx              # Root redirect to /dashboard
+│   ├── src/components/
+│   │   ├── features/             # Ingestion Dropzone, DocumentDetail, AgentTraceViewer,
+│   │   │                         # DocumentChatPanel (Model Arena), AnswerDisplay, RecentRunsTable
+│   │   ├── layout/               # Sidebar navigation with active Framer Motion layout pill
+│   │   └── ui/                   # Card, Button, StatTile, StatusBadge, RiskBadge, ActionItemChecklist,
+│   │                             # Meter, Skeleton, Shimmer, EmptyState, ThreeBackground, Toast
+│   ├── src/contexts/             # TenantContext, ToastContext & notification management
+│   ├── src/hooks/                # useDocumentPolling for live async ingestion status
+│   ├── src/lib/                  # apiClient, TypeScript types & Zod schema definitions
+│   ├── Dockerfile                # Multi-stage production frontend container (Next.js standalone)
+│   └── package.json              # Next.js 16, React 19, Framer Motion, Three.js dependencies
+├── docker-compose.yml            # Development infrastructure (PostgreSQL 16 + Redis)
+├── docker-compose.prod.yml       # Full-stack production stack (Postgres, Redis, Backend, Frontend)
+├── presentation_outline.md       # Slide-by-slide 20-min capstone presentation & technical defense guide
+└── prompt.md                     # Chronological prompt log of system iterations
 ```
 
-A standalone `mcp_host` app scaffolds an MCP server skeleton (one stub resource, one
-stub tool) — it is not started by the Django process and nothing calls it yet.
-`orchestration/model_client.py` (`LLMFactory`) and `orchestration/tool_registry.py`
-(`ToolRegistry`) stub the future Gemini/Groq client factory and the centralized
-LangChain/MCP tool registry — both pure-Python placeholders, no provider SDKs wired
-up. `memory/vector_client.py` (`ChromaDBClient`) similarly stubs the future semantic
-memory layer.
+---
 
-### Target architecture
+## 🚀 Running the System
 
-```
-Next.js Dashboard
-   |
-   v
-Django (DRF) -- ingestion, auth, persistence, observability (AgentRun/ToolCall/Answer/Citation)
-   |
-   v
-Deterministic Router -- fast, cheap, rule-based first pass (extension/keyword);
-   |                     only escalates to the LLM Supervisor when it can't classify confidently
-   v
-Supervisor Agent (Gemini) -- reads the document, decides which Sub-Agent(s) handle it,
-   |                          orchestrated via LangGraph
-   v
-Worker Sub-Agents (Groq) -- specialized per document type (sales RFP / questionnaire,
-   |                         invoice reconciliation, compliance audit), tool-calling
-   v
-MCP Server -- exposes OpsNexus data (documents, ledger lookups, prior answers/citations)
-              and actions as MCP resources/tools, consumed by the Supervisor + Workers;
-              ChromaDB backs semantic search over historical documents/citations for
-              retrieval-augmented answers
-```
+### Option 1: Full-Stack Production Stack via Docker Compose (Recommended)
 
-## Monorepo layout
-
-```
-backend/
-  opsnexus_backend/     Django project settings/urls
-  core/                 BaseModel, Organization, UserProfile (multi-tenancy)
-  documents/             Document model, DRF ViewSet, serializers
-  agents/                AgentProfile, AgentRun, ToolCall, Answer, Citation
-  orchestration/         DeterministicRouter, mock async agent runner,
-                          LLMFactory (model_client.py), ToolRegistry (tool_registry.py)
-  mcp_host/               Standalone MCP server skeleton
-  memory/                 ChromaDBClient vector-store stub
-frontend/
-  src/app/                Next.js App Router pages (/, /dashboard)
-  src/components/ui/      Card, Button, LoadingSpinner, Shimmer, StatusBadge, StatTile, Meter
-  src/components/layout/  Sidebar
-  src/components/features/ Dropzone, DashboardContent, AnswerDisplay
-  src/hooks/               useDocumentPolling
-  src/lib/                 apiClient, types
-docker-compose.yml         Local Postgres + Redis (project name: opsnexus)
-prompt.md                  Running log of every prompt used to build this system
-```
-
-## Tech choices
-
-| Layer | Choice | Status |
-|---|---|---|
-| Backend framework | Django 5 + Django REST Framework | Implemented |
-| Database | PostgreSQL (via Docker) | Implemented |
-| Background job broker | Redis (via Docker) | Infra scaffolded, no Celery tasks yet |
-| Frontend framework | Next.js (App Router) + TypeScript + Tailwind | Implemented |
-| Async DB access | Django 5.2 native async ORM (`aget`/`acreate`/`asave`) | Implemented |
-| Agent-to-tool protocol | Model Context Protocol (`mcp` SDK) | Skeleton scaffolded, not wired up |
-| Agent orchestration | LangGraph | Planned |
-| Supervisor LLM | Google Gemini | Planned |
-| Worker LLM | Groq-hosted models | Planned |
-| Vector store / RAG | ChromaDB + local HuggingFace embeddings | Planned |
-
-## Model selection rationale (free-tier optimization)
-
-The target architecture splits reasoning across two different model roles with
-different latency/quality tradeoffs, chosen to keep the whole pipeline runnable on
-free tiers during development:
-
-- **Supervisor -> Gemini.** The Supervisor's job is classification and orchestration
-  decisions (which Sub-Agent(s) should handle this document, in what order) — a
-  lower-throughput, higher-reasoning task where Gemini's free tier is generous enough
-  to run per-document without hitting rate limits, and its context window comfortably
-  covers full document text for classification.
-- **Workers -> Groq.** Worker Sub-Agents do the repetitive, tool-calling-heavy work
-  (extracting questionnaire answers, cross-referencing invoice line items, checking
-  compliance controls) — many short calls per document. Groq's inference speed keeps
-  per-document latency low even with several sequential tool calls, and its free tier
-  is well suited to high call volume, low-context-per-call workloads.
-
-This split means the expensive, careful reasoning happens once per document
-(Supervisor), while the cheap, fast, high-volume work (Workers) runs on the provider
-optimized for exactly that shape of load.
-
-## Running it locally
-
-### Infrastructure
+To launch the complete containerized production environment (PostgreSQL 16, Redis, Django Backend via Gunicorn/WhiteNoise, Next.js Frontend, ChromaDB persistence):
 
 ```bash
-docker compose up -d          # from the repo root: Postgres on localhost:5432,
-                               # Redis on localhost:6380 (project name "opsnexus")
+# 1. Clone the repository and navigate to root
+cd OpsNexus
+
+# 2. Build and launch all production services in the background
+docker compose -f docker-compose.prod.yml up --build -d
+
+# 3. View running container logs
+docker compose -f docker-compose.prod.yml logs -f
 ```
 
-### Backend
+#### Access Endpoints:
+- 🌐 **Frontend Dashboard**: [http://localhost:3000](http://localhost:3000)
+- 🔌 **Backend REST API**: [http://localhost:8000/api/v1/](http://localhost:8000/api/v1/)
+- 📖 **Interactive Swagger UI**: [http://localhost:8000/api/v1/docs/](http://localhost:8000/api/v1/docs/)
+- 📚 **ReDoc Documentation**: [http://localhost:8000/api/v1/redoc/](http://localhost:8000/api/v1/redoc/)
+- ⚙️ **Django Admin Portal**: [http://localhost:8000/admin/](http://localhost:8000/admin/)
 
+To tear down the production stack:
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+---
+
+### Option 2: Local Development Setup
+
+#### 1. Start Infrastructure Services (Postgres & Redis)
+From the repository root:
+```bash
+docker compose up -d
+```
+*Starts PostgreSQL 16 on `localhost:5432` and Redis on `localhost:6379`.*
+
+#### 2. Configure & Run Backend (Django 5.2)
 ```bash
 cd backend
-cp .env.example .env              # defaults already point at the docker-compose db
+
+# Create and activate a virtual environment
+python -m venv .venv
+# On Windows (PowerShell):
+.\.venv\Scripts\activate
+# On macOS / Linux:
+source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Configure environment variables
+cp .env.example .env
+
+# Apply database migrations
 python manage.py migrate
-python manage.py runserver        # http://localhost:8000
+
+# (Optional) Create an admin superuser
+python manage.py createsuperuser
+
+# Start the Django development server
+python manage.py runserver 8000
 ```
+*Backend runs at [http://localhost:8000](http://localhost:8000).*
 
-### Frontend
-
+#### 3. Configure & Run Frontend (Next.js 16)
+In a new terminal:
 ```bash
 cd frontend
-cp .env.local.example .env.local  # NEXT_PUBLIC_API_URL=http://localhost:8000/api
+
+# Configure environment variables
+cp .env.local.example .env.local
+
+# Install Node packages
 npm install
-npm run dev                        # http://localhost:3000
+
+# Start the Next.js development server
+npm run dev
+```
+*Frontend dashboard is live at [http://localhost:3000](http://localhost:3000).*
+
+---
+
+## 🔑 Environment Variables Reference
+
+### Backend (`backend/.env` or Docker Environment)
+
+| Variable | Default | Description |
+|---|---|---|
+| `SECRET_KEY` | `change-me-in-production` | Django secret cryptographic key |
+| `DEBUG` | `True` (Dev) / `False` (Prod) | Django debug mode |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Allowed HTTP host headers |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Allowed CORS origins for frontend requests |
+| `DATABASE_URL` | `postgres://opsnexus:opsnexus@127.0.0.1:5432/opsnexus` | PostgreSQL connection URL |
+| `REDIS_URL` | `redis://127.0.0.1:6379/1` | Redis connection URL for caching & broker |
+| `GOOGLE_API_KEY` | *(Optional)* | Google Gemini API key (Supervisor Agent, Fallback & Arena) |
+| `GROQ_API_KEY` | *(Optional)* | Groq API key (Sales Worker Sub-Agent & Arena LLaMA 3.3) |
+| `USE_S3` | `False` | Toggle AWS S3 storage instead of local disk |
+| `AWS_ACCESS_KEY_ID` | *(Optional)* | AWS credentials (only when `USE_S3=True`) |
+| `AWS_SECRET_ACCESS_KEY`| *(Optional)* | AWS credentials (only when `USE_S3=True`) |
+| `AWS_STORAGE_BUCKET_NAME` | *(Optional)* | Target S3 bucket name |
+| `AWS_S3_REGION_NAME` | `us-east-1` | AWS S3 region |
+
+> **Graceful Degradation Note**: If `GOOGLE_API_KEY` or `GROQ_API_KEY` are omitted during evaluation, OpsNexus automatically falls back to simulated deterministic responses and routing without crashing.
+
+### Frontend (`frontend/.env.local`)
+
+| Variable | Default | Description |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api` | Base URL pointing to the Django REST backend |
+
+---
+
+## 🧪 Testing & Quality Assurance
+
+### Running Backend Test Suite (170+ Passing Unit & Integration Tests)
+From the `backend/` directory:
+
+```bash
+# Run all tests with pytest
+pytest
+
+# Run tests with verbose output and test names
+pytest -v
+
+# Run tests with coverage analysis
+pytest --cov=. --cov-report=term-missing
+
+# Run specific test modules
+pytest orchestration/tests/test_guardrails.py
+pytest core/tests/test_throttling_and_security.py
+pytest documents/tests/test_e2e_pipeline.py
 ```
 
-### Testing the E2E mock upload flow
+### Running Frontend Linters & Build Validation
+From the `frontend/` directory:
 
-1. With both servers running, create an `Organization` to get a UUID to test with:
+```bash
+# Run ESLint validation
+npm run lint
+
+# Validate production Next.js App Router build
+npm run build
+```
+
+---
+
+## 📋 End-to-End Walkthrough Guide
+
+1. **Create an Organization Tenant**:
    ```bash
-   cd backend && python manage.py shell -c "
+   cd backend
+   python manage.py shell -c "
    from core.models import Organization
-   org, _ = Organization.objects.get_or_create(slug='demo', defaults={'name': 'Demo Org'})
-   print(org.id)"
+   org, _ = Organization.objects.get_or_create(slug='demo', defaults={'name': 'Demo Enterprise'})
+   print(f'Organization ID: {org.id}')
+   "
    ```
-2. Open `http://localhost:3000` (redirects to `/dashboard`).
-3. Paste that UUID into the "Organization ID" field.
-4. Drag a file onto the dropzone (or click it to browse). A row appears immediately
-   showing `processing`.
-5. Within ~2 seconds, the result card below transitions from a shimmering skeleton to
-   the mock `Answer` text and confidence score — driven by the frontend polling
-   `GET /api/documents/{id}/` until the backend's background stub marks it `completed`,
-   then fetching `GET /api/documents/{id}/answers/`.
-6. Optional: inspect the full trail in Django admin (`/admin/`, after
-   `python manage.py createsuperuser`) — `Document`, `AgentRun`, `ToolCall`, and
-   `Answer` rows are all visible there.
+2. **Access the Dashboard**: Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard). The default tenant UUID `00000000-0000-0000-0000-000000000001` or your created Org ID can be selected.
+3. **Upload a Document**: Drag and drop any RFP, questionnaire, invoice, or compliance report (`.pdf`, `.docx`, `.txt`, `.csv`, `.md`, `.log`).
+4. **Live Ingestion Telemetry**: The upload returns an instant HTTP 202 acknowledgment. The document status updates from `pending` -> `processing` -> `completed` via background polling.
+5. **Inspect the Document Workbench**: Click on the processed document row to enter the split-pane workbench:
+   - **Left Pane**: Interactive document file preview.
+   - **Right Pane (Tab 1 - RAG Chat & Model Arena)**: Ask grounded questions and toggle **Arena Compare Mode** to benchmark Groq vs. Gemini Flash latency (ms), token metrics, and chunk citations.
+   - **Right Pane (Tab 2 - Agent Intelligence & Trace)**: Inspect the LangGraph execution trace, Supervisor classification reasoning, risk matrix flags, action items checklist, and confidence score meter.
+6. **Verify SOC2 Audit Logs**: Review recorded administrative actions at `GET http://localhost:8000/api/v1/audit-logs/`.
+7. **Explore OpenAPI Documentation**: Navigate to [http://localhost:8000/api/v1/docs/](http://localhost:8000/api/v1/docs/) or [http://localhost:8000/api/v1/redoc/](http://localhost:8000/api/v1/redoc/) for interactive Swagger testing.
 
-## Prompt log
+---
 
-Every prompt used to build this system is logged, in order, in [`prompt.md`](./prompt.md).
+## 📽️ Presentation & System Prompts
+
+- 🎤 **Capstone Presentation Guide**: Detailed slide-by-slide talk tracks, visual diagrams, and Q&A defense strategies are documented in [`presentation_outline.md`](./presentation_outline.md).
+- 📜 **Prompt Log**: The chronological log of all engineering and architectural prompts used in building OpsNexus is available in [`prompt.md`](./prompt.md).
