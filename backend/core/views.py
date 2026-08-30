@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 
 from core.mixins import TenantScopedViewSetMixin
 from core.middleware import AuditLogContextMixin
+from orchestration.model_client import LLMFactory, SUPERVISOR_MODEL_NAME, WORKER_MODEL_NAME
 from core.models import AuditLog, HealthRule, Organization, Playbook
 from core.permissions import IsOrganizationAdmin
 from core.serializers import (
@@ -262,13 +263,13 @@ class SystemStatusView(APIView):
             "cluster": "opsnexus-swarm-primary",
             "components": {
                 "supervisor_llm": {
-                    "model": "gemini-2.5-flash",
+                    "model": SUPERVISOR_MODEL_NAME,
                     "provider": "google",
                     "configured": has_gemini,
                     "status": "ready" if has_gemini else "simulated_fallback",
                 },
                 "worker_llm": {
-                    "model": "llama-3.3-70b-versatile",
+                    "model": WORKER_MODEL_NAME,
                     "provider": "groq",
                     "configured": has_groq,
                     "status": "ready" if has_groq else "simulated_fallback",

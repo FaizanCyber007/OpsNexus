@@ -10,6 +10,14 @@ from core.factories import OrganizationFactory, UserFactory, UserProfileFactory
 from core.models import UserProfile
 from documents.factories import DocumentFactory
 from documents.models import Document
+from orchestration.model_client import SUPERVISOR_MODEL_NAME
+
+
+@pytest.fixture(autouse=True)
+def reset_cache():
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture
@@ -24,12 +32,6 @@ def auth_client():
 
 @pytest.mark.django_db
 class TestRateLimitingThrottling:
-    def setup_method(self):
-        cache.clear()
-
-    def teardown_method(self):
-        cache.clear()
-
     def test_document_upload_throttled_at_5_requests_per_minute(self, auth_client):
         """Verify 429 Too Many Requests status code when upload throttle is exceeded."""
 
@@ -84,7 +86,7 @@ class TestRateLimitingThrottling:
             "question": "What is the policy?",
             "retrieved_context": [],
             "result": {
-                "model_name": "Gemini Flash (gemini-2.5-flash)",
+                "model_name": f"Gemini Flash ({SUPERVISOR_MODEL_NAME})",
                 "provider": "gemini",
                 "response": "Policy terms verified.",
                 "execution_time_ms": 150,

@@ -19,6 +19,8 @@ import type { ToolCall } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 1500;
 const MAX_POLL_BACKOFF_MS = 15000;
+/** Hard ceiling: stop polling after 5 minutes regardless of terminal state. */
+const MAX_POLL_DURATION_MS = 5 * 60 * 1000;
 
 const STEP_LABELS: Record<string, { label: string; icon: typeof Database }> = {
   langgraph_supervisor_classify: {
@@ -151,6 +153,7 @@ export function AgentTraceViewer({ agentRunId, isTerminal }: AgentTraceViewerPro
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout>;
     let consecutiveFailures = 0;
+    const startTime = Date.now();
 
     async function poll() {
       try {
@@ -168,13 +171,21 @@ export function AgentTraceViewer({ agentRunId, isTerminal }: AgentTraceViewerPro
         consecutiveFailures += 1;
       }
 
-      if (!cancelled && !isTerminal) {
-        const delay =
-          consecutiveFailures > 0
-            ? Math.min(POLL_INTERVAL_MS * 2 ** consecutiveFailures, MAX_POLL_BACKOFF_MS)
-            : POLL_INTERVAL_MS;
-        timeoutId = setTimeout(poll, delay);
+      // Stop polling if terminal, max duration exceeded, or too many failures
+      if (
+        cancelled ||
+        isTerminal ||
+        Date.now() - startTime >= MAX_POLL_DURATION_MS ||
+        consecutiveFailures >= 5
+      ) {
+        return;
       }
+
+      const delay =
+        consecutiveFailures > 0
+          ? Math.min(POLL_INTERVAL_MS * 2 ** consecutiveFailures, MAX_POLL_BACKOFF_MS)
+          : POLL_INTERVAL_MS;
+      timeoutId = setTimeout(poll, delay);
     }
 
     poll();

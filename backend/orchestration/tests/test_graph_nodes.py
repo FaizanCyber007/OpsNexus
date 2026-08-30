@@ -6,14 +6,16 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from orchestration.graph import (
+    ComplianceWorkerError,
     SalesWorkerError,
     _extract_tool_calls,
     _route_after_supervisor,
+    compliance_worker_node,
     sales_worker_node,
     supervisor_node,
 )
 from orchestration.model_client import LLMConfigurationError
-from orchestration.schemas import ClassificationResult, StructuredAnswer
+from orchestration.schemas import ClassificationResult, ComplianceAuditResult, StructuredAnswer
 
 
 def _make_structured_answer(**overrides):
@@ -33,10 +35,22 @@ def test_route_after_supervisor_sends_sales_rfp_to_worker():
 
 
 @pytest.mark.parametrize(
-    "route", ["invoice_reconciliation", "compliance_audit", "general_intake"]
+    "route", ["general_intake"]
 )
-def test_route_after_supervisor_ends_for_other_routes(route):
+def test_route_after_supervisor_ends_for_unhandled_routes(route):
+    """Routes without a dedicated Worker should fall through to __end__ so
+    agent_runner.py can apply its mock-pipeline fallback."""
     assert _route_after_supervisor({"route": route}) == "__end__"
+
+
+def test_route_after_supervisor_sends_compliance_audit_to_worker():
+    """compliance_audit now has a real Compliance Worker node."""
+    assert _route_after_supervisor({"route": "compliance_audit"}) == "compliance_worker"
+
+
+def test_route_after_supervisor_sends_invoice_reconciliation_to_worker():
+    """invoice_reconciliation has a real Invoice Worker node."""
+    assert _route_after_supervisor({"route": "invoice_reconciliation"}) == "invoice_worker"
 
 
 class TestExtractToolCalls:
@@ -98,9 +112,7 @@ class TestSupervisorNode:
             route="invoice_reconciliation", reasoning="Mentions line items and totals."
         )
         fake_llm = MagicMock()
-        fake_llm.with_structured_output.return_value.ainvoke = AsyncMock(
-            return_value=canned
-        )
+        fake_llm.ainvoke = AsyncMock(return_value=canned)
 
         with patch("orchestration.graph.LLMFactory") as MockFactory:
             MockFactory.return_value.get_supervisor_llm.return_value = fake_llm
@@ -117,16 +129,14 @@ class TestSupervisorNode:
     def test_empty_document_text_still_invokes_llm(self):
         canned = ClassificationResult(route="general_intake", reasoning="No content.")
         fake_llm = MagicMock()
-        fake_llm.with_structured_output.return_value.ainvoke = AsyncMock(
-            return_value=canned
-        )
+        fake_llm.ainvoke = AsyncMock(return_value=canned)
 
         with patch("orchestration.graph.LLMFactory") as MockFactory:
             MockFactory.return_value.get_supervisor_llm.return_value = fake_llm
             result = asyncio.run(supervisor_node({"document_text": ""}))
 
         assert result["route"] == "general_intake"
-        call_args = fake_llm.with_structured_output.return_value.ainvoke.call_args
+        call_args = fake_llm.ainvoke.call_args
         assert "(empty document)" in call_args.args[0][1][1]
 
 

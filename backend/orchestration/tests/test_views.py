@@ -14,6 +14,10 @@ from core.factories import OrganizationFactory
 User = get_user_model()
 
 
+from django.core.cache import cache
+from orchestration.model_client import SUPERVISOR_MODEL_NAME
+
+
 @pytest.fixture
 def auth_context(db):
     user = User.objects.create_superuser(  # type: ignore
@@ -32,8 +36,12 @@ def api_client(auth_context):
 @pytest.fixture(autouse=True)
 def reset_llm_api_keys(monkeypatch):
     """Ensure tests run simulated fallbacks by default without live network calls."""
+    cache.clear()
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    yield
+    cache.clear()
 
 
 @pytest.mark.django_db
@@ -243,7 +251,7 @@ class TestDocumentChatEndpoint:
                 {"text": "Cached chunk text", "metadata": {}, "distance": 0.1}
             ],
             "result": {
-                "model_name": "Gemini Flash (gemini-2.5-flash)",
+                "model_name": f"Gemini Flash ({SUPERVISOR_MODEL_NAME})",
                 "provider": "gemini",
                 "response": "The return policy is 30 days.",
                 "execution_time_ms": 150,

@@ -19,6 +19,7 @@ export interface Document {
   file: string | null;
   file_path: string;
   latest_agent_run_id: string | null;
+  latest_agent_run_error: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

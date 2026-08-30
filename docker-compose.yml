@@ -23,10 +23,8 @@ services:
     image: redis:alpine
     container_name: opsnexus_redis
     restart: unless-stopped
-    # No published port: nothing outside this compose network consumes Redis
-    # yet (prepping for Week 6/7 Celery), and it ships with no auth by
-    # default -- a future Celery worker connects via the internal `redis`
-    # hostname on the compose network, not a host-published port.
+    ports:
+      - "6379:6379"
     volumes:
       - opsnexus_redisdata:/data
     healthcheck:

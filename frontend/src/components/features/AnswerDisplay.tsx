@@ -71,9 +71,16 @@ export function AnswerDisplay({
 
       {/* Failure message */}
       {document?.status === "failed" && (
-        <div className="mb-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>Processing failed for this document run.</span>
+        <div className="mb-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 space-y-1">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span className="font-semibold">Processing failed</span>
+          </div>
+          {document.latest_agent_run_error && (
+            <p className="text-rose-200/80 leading-relaxed pl-6 break-words">
+              {document.latest_agent_run_error}
+            </p>
+          )}
         </div>
       )}
 

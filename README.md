@@ -10,7 +10,7 @@ The platform is architected as a production-grade monorepo featuring a high-perf
 
 ### 🧠 LangGraph Hierarchical Multi-Agent Swarm
 - **Supervisor Agent (Google Gemini 2.5 Flash)**: Ingests raw document context, classifies intent (`sales_rfp`, `invoice_reconciliation`, `compliance_audit`, `general_intake`), and orchestrates domain-specific worker sub-agents.
-- **Worker Sub-Agents (Groq LLaMA 3.3 / `openai/gpt-oss-120b`)**: Ultra-fast ReAct agent executing targeted tool loops, querying MCP knowledge servers, and synthesizing structured outputs.
+- **Worker Sub-Agents (Groq `openai/gpt-oss-120b`)**: Ultra-fast ReAct agent executing targeted tool loops, querying MCP knowledge servers, and synthesizing structured outputs.
 - **Deterministic Fast-Path Router**: Sub-millisecond rule-based keyword/regex routing before LLM escalation.
 - **Production Guardrails & Auto-Correction**:
   - **Pydantic Auto-Correction Loops**: Catches schema validation failures (`ValidationError`) and feeds error context back to the model for self-correction up to `MAX_VALIDATION_LOOPS` (2) attempts.
@@ -29,7 +29,7 @@ The platform is architected as a production-grade monorepo featuring a high-perf
 
 ### ⚔️ Interactive RAG Document Chat & Model Arena
 - **Grounded Conversational RAG**: In-app document Q&A with verifiable chunk-level citations and similarity scores.
-- **Model Arena (`compare=true`)**: Side-by-side concurrent execution comparing **Groq (LLaMA 3.3)** vs. **Google Gemini (2.5 Flash)** measuring roundtrip latency (ms), token consumption, and response accuracy.
+- **Model Arena (`compare=true`)**: Side-by-side concurrent execution comparing **Groq (`openai/gpt-oss-120b`)** vs. **Google Gemini (2.5 Flash)** measuring roundtrip latency (ms), token consumption, and response accuracy.
 - **Redis Response Caching**: Parameterized SHA-256 query caching with 15-minute TTL (`django-redis`) for sub-5ms repeated query responses.
 
 ### 🛡️ Enterprise Security, SOC2 Audit Logging & Rate Limiting
@@ -80,7 +80,7 @@ flowchart TD
         FastRouter{"Deterministic Fast Router"}
         Supervisor["Supervisor Agent (Gemini 2.5 Flash)"]
         Guardrails{"Pydantic Auto-Correction & Tenacity Retries"}
-        SalesWorker["Sales Worker Sub-Agent (Groq LLaMA 3.3)"]
+        SalesWorker["Sales Worker Sub-Agent (Groq gpt-oss-120b)"]
         Fallback["Gemini Fallback Chain"]
         MCPClient["MCP Client Bridge (JSON-RPC)"]
         MCPHost["MCP Tool Server (Internal Pricing & Knowledge)"]
@@ -127,7 +127,7 @@ flowchart TD
 | **Styling & Animation** | Tailwind CSS 4 + Framer Motion 13 + Three.js | Dark mode, micro-interactions & 3D background | ✅ Implemented |
 | **Agent Orchestration** | LangGraph 1.2 + LangChain Core | State machine graphs, cyclical routing & guardrails | ✅ Implemented |
 | **Supervisor LLM** | Google Gemini 2.5 Flash (`langchain-google-genai`) | High-reasoning document classification & routing | ✅ Implemented |
-| **Worker Sub-Agents** | Groq LLaMA 3.3 / `openai/gpt-oss-120b` (`langchain-groq`) | Ultra-fast ReAct tool execution & structured output | ✅ Implemented |
+| **Worker Sub-Agents** | Groq `openai/gpt-oss-120b` (`langchain-groq`) | Ultra-fast ReAct tool execution & structured output | ✅ Implemented |
 | **Tool Protocol** | Model Context Protocol (Anthropic `mcp` 2.0.0 SDK) | Decoupled JSON-RPC 2.0 tool execution layer | ✅ Implemented |
 | **Vector Database / RAG** | ChromaDB 1.5.9 + `sentence-transformers` 5.5 | Local dense embeddings (`all-MiniLM-L6-v2`) | ✅ Implemented |
 | **Relational Database** | PostgreSQL 16 (Alpine) + `psycopg3` | Multi-tenant document, run, trace & audit persistence | ✅ Implemented |
@@ -271,6 +271,12 @@ python manage.py createsuperuser
 
 # Start the Django development server
 python manage.py runserver 8000
+
+# IN A NEW TERMINAL: Start the RQ Worker (Required for processing documents!)
+# On Windows:
+python manage.py rqworker default --worker-class rq.worker.SimpleWorker
+# On macOS / Linux:
+python manage.py rqworker default
 ```
 *Backend runs at [http://localhost:8000](http://localhost:8000).*
 

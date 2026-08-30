@@ -9,6 +9,7 @@ import {
   Bot,
   FileText,
   Workflow,
+  AlertTriangle,
 } from "lucide-react";
 import { AgentIntelligencePanel } from "@/components/features/AgentIntelligencePanel";
 import { AgentTraceViewer } from "@/components/features/AgentTraceViewer";
@@ -102,6 +103,23 @@ export function DocumentDetailContent({ documentId }: DocumentDetailContentProps
           </div>
         )}
       </div>
+
+      {/* Agent Error Banner */}
+      {document?.status === "failed" && document?.latest_agent_run_error && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-4 w-4 text-rose-400 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-rose-300 mb-1">
+                Agent Pipeline Error
+              </p>
+              <p className="text-xs text-rose-200/80 leading-relaxed break-words">
+                {document.latest_agent_run_error}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Workbench Dual-Pane Layout */}
       <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-2 min-h-0">

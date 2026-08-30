@@ -96,7 +96,7 @@ class DocumentViewSet(AuditLogContextMixin, TenantScopedViewSetMixin, ModelViewS
         if getattr(self, "action", None) == "create":
             return [DocumentUploadRateThrottle()]  # type: ignore
         if getattr(self, "action", None) == "chat":
-            return [ChatRateThrottle()]  # type: ignore
+            return []  # Delegated to DocumentChatView which has ChatRateThrottle
         return super().get_throttles()
 
     def get_queryset(self):

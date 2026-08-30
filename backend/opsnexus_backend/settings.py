@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -102,8 +103,9 @@ WSGI_APPLICATION = "opsnexus_backend.wsgi.application"
 
 _is_testing = (
     "pytest" in sys.modules
-    or "pytest" in sys.argv[0]
+    or any("pytest" in str(arg) for arg in sys.argv)
     or (len(sys.argv) > 1 and sys.argv[1] == "test")
+    or os.environ.get("PYTEST_CURRENT_TEST") is not None
 )
 
 DATABASES = {
@@ -190,15 +192,22 @@ CHROMA_PERSIST_DIR = BASE_DIR / "chroma_data"
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
 CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "IGNORE_EXCEPTIONS": True,
-        },
-        "KEY_PREFIX": "opsnexus",
-    }
+    "default": (
+        {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "opsnexus-test-cache",
+        }
+        if _is_testing
+        else {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "IGNORE_EXCEPTIONS": True,
+            },
+            "KEY_PREFIX": "opsnexus",
+        }
+    )
 }
 
 RQ_QUEUES = {
@@ -230,7 +239,9 @@ NUM_PROXIES = env.int("NUM_PROXIES", default=0)
 # Django REST Framework & OpenAPI Configuration
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_AUTHENTICATION_CLASSES": [
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        [] if _is_testing else ["core.authentication.DummyAdminAuthentication"]
+    ) + [
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [

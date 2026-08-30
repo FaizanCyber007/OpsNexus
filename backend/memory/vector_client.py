@@ -105,6 +105,41 @@ def get_organization_collection_name(organization_id: Any) -> str:
     return f"org_{organization_id}"
 
 
+_persistent_client = None
+_persistent_client_lock = threading.Lock()
+
+
+def _get_chroma_client():
+    """Lazily construct the shared PersistentClient (or EphemeralClient fallback)."""
+    global _persistent_client
+    if _persistent_client is None:
+        with _persistent_client_lock:
+            if _persistent_client is None:
+                import chromadb
+                from django.conf import settings
+
+                persist_dir = str(settings.CHROMA_PERSIST_DIR)
+                os.makedirs(persist_dir, exist_ok=True)
+                try:
+                    _persistent_client = chromadb.PersistentClient(
+                        path=persist_dir,
+                        settings=chromadb.config.Settings(
+                            anonymized_telemetry=False,
+                            is_persistent=True,
+                        ),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "ChromaDB PersistentClient failed (%s); falling back to "
+                        "EphemeralClient. Vectors will not persist across restarts.",
+                        exc,
+                    )
+                    _persistent_client = chromadb.EphemeralClient(
+                        settings=chromadb.config.Settings(anonymized_telemetry=False)
+                    )
+    return _persistent_client
+
+
 class ChromaDBClient:
     """Wrapper around a per-organization ChromaDB collection."""
 
@@ -115,15 +150,13 @@ class ChromaDBClient:
     def initialize_collection(self):
         """Create or open the ChromaDB collection for this client."""
         if self._store is None:
-            import chromadb
-            from django.conf import settings
             from langchain_chroma import Chroma
 
+            client = _get_chroma_client()
             self._store = Chroma(
                 collection_name=self.collection_name,
                 embedding_function=_get_embeddings(),
-                persist_directory=str(settings.CHROMA_PERSIST_DIR),
-                client_settings=chromadb.config.Settings(anonymized_telemetry=False),
+                client=client,
             )
         return self._store
 
@@ -203,13 +236,33 @@ def extract_text(file_path: str) -> str:
                 exc_info=True,
             )
             return ""
+    elif extension in {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".exe", ".bin", ".zip", ".tar", ".gz"}:
+        # Non-text binary file types
+        return ""
     else:
         try:
+            # Check for binary null bytes in the first block
+            with open(file_path, "rb") as bf:
+                sample = bf.read(1024)
+                if b"\x00" in sample:
+                    return ""
+
             with open(file_path, "r", encoding="utf-8") as f:
                 text = f.read()
-        except (UnicodeDecodeError, OSError):
+        except UnicodeDecodeError:
+            try:
+                # Fallback for CSVs and text files saved from Windows/Excel
+                with open(file_path, "r", encoding="windows-1252") as f:
+                    text = f.read()
+            except (UnicodeDecodeError, OSError):
+                logger.warning(
+                    "Skipping memory ingestion for %s: not a decodable text file",
+                    file_path,
+                )
+                return ""
+        except OSError:
             logger.warning(
-                "Skipping memory ingestion for %s: not a decodable text file",
+                "Skipping memory ingestion for %s: unreadable file",
                 file_path,
             )
             return ""
