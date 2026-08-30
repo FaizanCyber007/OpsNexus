@@ -44,7 +44,7 @@
 ## Slide 4: Key Capabilities & Features
 *   **Title:** What Sets OpsNexus Apart
 *   **Content (Bullet points to stagger in):**
-    *   **Hierarchical Agent Swarm:** Supervisor Agent (Gemini 2.5 Flash) orchestrating specific Worker Sub-Agents (Groq running `openai/gpt-oss-120b`).
+    *   **Hierarchical Agent Swarm:** Supervisor Agent (Gemini 2.5 Flash) orchestrating specific Worker Sub-Agents (Groq running `openai/gpt-oss-120b`) including specialized Sales, Finance, and Compliance workers.
     *   **Model Context Protocol (MCP 2.0):** Zero vendor lock-in integration of internal tools and company knowledge.
     *   **Zero-Cost Local RAG:** Multi-format parsing (PDF, CSV, MD) with HuggingFace local dense vector embeddings.
     *   **Model Arena:** Real-time A/B benchmarking of Groq vs. Gemini for latency, tokens, and accuracy.
@@ -63,8 +63,12 @@
         API --> Memory["Vector Layer (ChromaDB)"]
         API --> Agents["LangGraph Swarm"]
         Agents --> Sub1["Supervisor (Gemini 2.5)"]
-        Agents --> Sub2["Worker (Groq gpt-oss-120b)"]
+        Agents --> Sub2["Sales Worker (Groq)"]
+        Agents --> Sub3["Invoice Worker (Groq)"]
+        Agents --> Sub4["Compliance Worker (Groq)"]
         Sub2 --> MCP["MCP 2.0 Host (Tools)"]
+        Sub3 --> MCP
+        Sub4 --> MCP
         API --> DB[("PostgreSQL & Redis")]
     ```
 *   **Visual Elements:** Transform the above Mermaid diagram into a beautiful horizontal pipeline flow using the presentation theme colors.
@@ -77,11 +81,11 @@
 *   **Content:** 
     1.  **Ingestion:** User drops a document. HTTP 202 async intake begins; Parsers extract text and generate local dense embeddings.
     2.  **Supervisor Classification:** The Gemini 2.5 Flash Supervisor evaluates context using a Pydantic Auto-Correction loop (max 2 retries) to strictly classify the intent.
-    3.  **Routing:** If the document is an RFP, it's routed to the `sales_worker` node.
-    4.  **Worker Execution:** The Worker ReAct agent (Groq `gpt-oss-120b`) securely connects to an MCP 2.0 server to access tools (`search_company_knowledge` & `get_internal_pricing_policy`).
+    3.  **Routing:** The document is routed to the specialized node: `sales_worker` for RFPs, `invoice_worker` for ledger reconciliation, or `compliance_worker` for audits.
+    4.  **Worker Execution:** The respective ReAct agent (Groq `gpt-oss-120b`) securely connects to an MCP 2.0 server to access context-specific tools (e.g. `search_company_knowledge`, `get_security_policies`, or `get_open_purchase_orders`).
     5.  **Telemetry & Output:** The frontend live-polls the PostgreSQL database, displaying the intermediate reasoning trace and the final structured answer in real-time.
 *   **Visual Elements:** A step-by-step chevron or timeline diagram highlighting the "Supervisor" -> "Worker" -> "MCP" handoff.
-*   **Speaker Notes:** "Let's walk through the actual flow. When an RFP is uploaded, it is embedded locally. Our Gemini Supervisor strictly classifies it and assigns it to the Sales Worker. Running on Groq for ultra-low latency, the worker uses our MCP server to fetch internal pricing policies and vector DB knowledge, looping until it builds a perfect, structured response."
+*   **Speaker Notes:** "Let's walk through the actual flow. When a document is uploaded, it is embedded locally. Our Gemini Supervisor strictly classifies it and assigns it to the correct specialized worker—Sales, Invoice, or Compliance. Running on Groq for ultra-low latency, the worker uses our MCP server to fetch the exact enterprise tools needed—like security policies or PO ledgers—looping until it builds a perfect, structured response."
 
 ---
 
@@ -101,10 +105,10 @@
 *   **Title:** Secure Tool Integration via MCP
 *   **Content:**
     *   **What is it?** Anthropic's new open standard for exposing tools to AI models.
-    *   **How we use it:** We built a standalone `mcp_host/server.py` exposing tools like `get_internal_pricing_policy` over `stdio` via JSON-RPC.
-    *   **Benefit:** Zero vendor lock-in. Our `gpt-oss-120b` ReAct agent talks to the MCP client securely via an `AsyncExitStack` context manager, completely decoupling company data from the LLM framework.
+    *   **How we use it:** We built a standalone `mcp_host/server.py` exposing tools like `get_security_policies` and `get_open_purchase_orders` over `stdio` via JSON-RPC.
+    *   **Benefit:** Zero vendor lock-in. Our `gpt-oss-120b` ReAct agents talk to the MCP client securely via an `AsyncExitStack` context manager, completely decoupling company data from the LLM framework.
 *   **Visual Elements:** A "Plug and Play" visual showing a generic Agent plugging into an "MCP Tool Server" which holds "Company Data".
-*   **Speaker Notes:** "To give agents access to private company knowledge safely, we adopted Anthropic's MCP 2.0 standard. By decoupling our tools into a standalone JSON-RPC server, our worker agents can execute internal scripts—like fetching exact pricing policies—without locking our architecture into a specific LLM vendor SDK."
+*   **Speaker Notes:** "To give agents access to private company knowledge safely, we adopted Anthropic's MCP 2.0 standard. By decoupling our tools into a standalone JSON-RPC server, our worker agents can execute internal scripts—like fetching exact pricing policies or PO ledgers—without locking our architecture into a specific LLM vendor SDK."
 
 ---
 
