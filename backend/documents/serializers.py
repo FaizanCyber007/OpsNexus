@@ -16,6 +16,7 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".csv", ".log"}
 
 class DocumentSerializer(serializers.ModelSerializer):
     latest_agent_run_id = serializers.SerializerMethodField()
+    latest_agent_run_error = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -27,6 +28,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "file",
             "file_path",
             "latest_agent_run_id",
+            "latest_agent_run_error",
             "created_at",
             "updated_at",
             "deleted_at",
@@ -36,6 +38,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "status",
             "file_path",
             "latest_agent_run_id",
+            "latest_agent_run_error",
             "created_at",
             "updated_at",
             "deleted_at",
@@ -67,10 +70,41 @@ class DocumentSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def get_latest_agent_run_id(self, obj):
-        annotated = getattr(obj, "latest_agent_run_id_value", None)
-        if annotated is not None:
-            return str(annotated)
+    def _get_latest_agent_run(self, obj):
+        """Return the most recent AgentRun for this document, with caching.
 
-        agent_run = obj.agent_runs.order_by("-created_at").first()
-        return str(agent_run.id) if agent_run else None
+        Uses the annotated ``latest_agent_run_id_value`` from the queryset
+        when available to avoid an extra query; otherwise falls back to a
+        direct lookup.
+        """
+        if not hasattr(obj, "_latest_agent_run_cached"):
+            annotated_id = getattr(obj, "latest_agent_run_id_value", None)
+            if annotated_id is not None:
+                from agents.models import AgentRun
+
+                try:
+                    obj._latest_agent_run_cached = AgentRun.objects.get(
+                        id=annotated_id
+                    )
+                except AgentRun.DoesNotExist:
+                    obj._latest_agent_run_cached = None
+            else:
+                obj._latest_agent_run_cached = (
+                    obj.agent_runs.order_by("-created_at").first()
+                )
+        return obj._latest_agent_run_cached
+
+    def get_latest_agent_run_id(self, obj):
+        run = self._get_latest_agent_run(obj)
+        return str(run.id) if run else None
+
+    def get_latest_agent_run_error(self, obj):
+        """Surface the error message from the latest agent run, if any.
+
+        This lets the frontend display a clear failure reason instead of
+        silently showing mock results.
+        """
+        run = self._get_latest_agent_run(obj)
+        if run and run.error_message:
+            return run.error_message
+        return None

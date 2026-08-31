@@ -30,6 +30,24 @@ import os
 
 logger = logging.getLogger(__name__)
 
+# --- Monkey-patch LangChain's Runnable wrappers to preserve .bind_tools() ---
+from langchain_core.runnables.retry import RunnableRetry
+from langchain_core.runnables.fallbacks import RunnableWithFallbacks
+
+if not hasattr(RunnableRetry, "bind_tools"):
+    def _bind_tools_retry(self, *args, **kwargs):
+        bound = self.bound.bind_tools(*args, **kwargs)
+        return bound.with_retry(**self.kwargs)
+    RunnableRetry.bind_tools = _bind_tools_retry
+
+if not hasattr(RunnableWithFallbacks, "bind_tools"):
+    def _bind_tools_fallbacks(self, *args, **kwargs):
+        bound_runnable = self.runnable.bind_tools(*args, **kwargs)
+        bound_fallbacks = [f.bind_tools(*args, **kwargs) for f in self.fallbacks]
+        return bound_runnable.with_fallbacks(bound_fallbacks)
+    RunnableWithFallbacks.bind_tools = _bind_tools_fallbacks
+# ---------------------------------------------------------------------------
+
 # ------------------------------------------------------------------
 # Public constants (imported by agent_runner.py and tests)
 # ------------------------------------------------------------------
@@ -38,8 +56,8 @@ logger = logging.getLogger(__name__)
 # retired by their providers in turn; these are the current equivalents in
 # the same tier (fast supervisor / large tool-calling-capable worker),
 # reconfirmed against each provider's live model list each time.
-SUPERVISOR_MODEL_NAME = "gemini-2.5-flash"
-WORKER_MODEL_NAME = "openai/gpt-oss-120b"
+SUPERVISOR_MODEL_NAME = os.environ.get("SUPERVISOR_MODEL_NAME", "gemini-2.5-flash")
+WORKER_MODEL_NAME = os.environ.get("WORKER_MODEL_NAME", "qwen/qwen3.8-27b")
 
 # How many total attempts are made on transient API errors (1 original + N-1 retries).
 LLM_RETRY_ATTEMPTS = 3
@@ -108,13 +126,11 @@ class LLMFactory:
         """Wrap any Runnable with the project's standard retry policy."""
         return _apply_retry_policy(runnable)
 
-    def get_supervisor_llm(self):
+    def get_supervisor_llm(self, structured_schema=None):
         """Return a configured Gemini client for Supervisor classification.
 
-        The returned Runnable wraps ``ChatGoogleGenerativeAI`` with the
-        standard tenacity retry policy (see module docstring). Callers may
-        still chain ``.with_structured_output()`` on the result because
-        ``with_retry()`` preserves all Runnable method bindings.
+        If a structured_schema is provided, the LLM is wrapped with
+        .with_structured_output() BEFORE the retry policy is applied.
         """
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
@@ -129,28 +145,35 @@ class LLMFactory:
             model=SUPERVISOR_MODEL_NAME,
             google_api_key=api_key,
             temperature=0,
+            timeout=25,
         )
+
+        if structured_schema:
+            llm = llm.with_structured_output(structured_schema)
+
         return _apply_retry_policy(llm)
 
     def get_worker_llm(self):
         """Return a Groq-primary / Gemini-fallback worker chain.
 
-        Architecture:
-        - Primary: Groq (fast, cheap tool-calling), with tenacity retries.
-        - Fallback: Gemini (same key as Supervisor; activated automatically
-          by LangChain's ``.with_fallbacks()`` if Groq raises on all retry
-          attempts).
+        Graceful degradation when only one provider is configured:
 
-        The resulting chain is returned as-is; callers use it exactly like a
-        plain ``ChatGroq`` instance (``create_react_agent``, ``ainvoke``, etc).
+        - **Both keys present**: Groq primary with Gemini fallback.
+          Fast, cheap tool-calling via Groq; if Groq exhausts retries,
+          Gemini takes over transparently.
+        - **Only GROQ_API_KEY**: Groq primary, no fallback.
+        - **Neither key or missing GROQ_API_KEY**: raises ``LLMConfigurationError``.
         """
         groq_key = os.environ.get("GROQ_API_KEY")
+        google_key = os.environ.get("GOOGLE_API_KEY")
+
         if not groq_key:
             raise LLMConfigurationError(
-                "GROQ_API_KEY is not set in backend/.env -- the Groq Worker "
-                "cannot run without it."
+                "GROQ_API_KEY is not set in backend/.env -- the Groq "
+                "Worker cannot run without it."
             )
 
+        # --- Groq primary path ---
         from langchain_groq import ChatGroq
 
         groq_llm = _apply_retry_policy(
@@ -158,13 +181,10 @@ class LLMFactory:
                 model=WORKER_MODEL_NAME,
                 groq_api_key=groq_key,
                 temperature=0,
+                request_timeout=25,
             )
         )
 
-        # Build the Gemini fallback only when its key is available; if not,
-        # we still return Groq-only (the LLMConfigurationError for Groq is
-        # the priority signal, not the absence of the optional fallback key).
-        google_key = os.environ.get("GOOGLE_API_KEY")
         if google_key:
             from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -173,6 +193,7 @@ class LLMFactory:
                     model=SUPERVISOR_MODEL_NAME,
                     google_api_key=google_key,
                     temperature=0,
+                    timeout=25,
                 )
             )
             logger.debug("Worker LLM: Groq primary with Gemini fallback configured.")

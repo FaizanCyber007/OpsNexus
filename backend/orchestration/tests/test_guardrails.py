@@ -83,9 +83,7 @@ class TestPydanticAutoCorrectionLoop:
 
         # ainvoke: first call raises, second call succeeds.
         fake_llm = MagicMock()
-        fake_llm.with_structured_output.return_value.ainvoke = AsyncMock(
-            side_effect=[validation_err, good_result]
-        )
+        fake_llm.ainvoke = AsyncMock(side_effect=[validation_err, good_result])
 
         with patch("orchestration.graph.LLMFactory") as MockFactory:
             MockFactory.return_value.get_supervisor_llm.return_value = fake_llm
@@ -96,7 +94,7 @@ class TestPydanticAutoCorrectionLoop:
 
         assert result == {"route": "sales_rfp", "reasoning": "Mentions RFP and SOC2."}
 
-        mock_ainvoke = fake_llm.with_structured_output.return_value.ainvoke
+        mock_ainvoke = fake_llm.ainvoke
         assert mock_ainvoke.call_count == 2, (
             f"Expected 2 LLM calls (1 fail + 1 correction), got "
             f"{mock_ainvoke.call_count}"
@@ -123,9 +121,7 @@ class TestPydanticAutoCorrectionLoop:
         validation_err = _make_validation_error()
 
         fake_llm = MagicMock()
-        fake_llm.with_structured_output.return_value.ainvoke = AsyncMock(
-            side_effect=validation_err
-        )
+        fake_llm.ainvoke = AsyncMock(side_effect=validation_err)
 
         with patch("orchestration.graph.LLMFactory") as MockFactory:
             MockFactory.return_value.get_supervisor_llm.return_value = fake_llm
@@ -136,30 +132,30 @@ class TestPydanticAutoCorrectionLoop:
                 )
 
         expected_calls = MAX_VALIDATION_LOOPS + 1
-        actual_calls = fake_llm.with_structured_output.return_value.ainvoke.call_count
+        actual_calls = fake_llm.ainvoke.call_count
         assert actual_calls == expected_calls, (
             f"Expected exactly {expected_calls} LLM calls before giving up, "
             f"got {actual_calls}"
         )
 
     def test_sales_worker_retries_on_validation_error_then_succeeds(self):
-        """``_run_sales_worker_agent`` must retry the ReAct agent on
-        ValidationError, appending a correction HumanMessage to the message
-        list before re-invoking.
+        """``_run_sales_worker_agent`` extracts tool calls and parses the
+        StructuredAnswer from the model submission tool or JSON content.
         """
-        validation_err = _make_validation_error()
         good_answer = _make_structured_answer(content="corrected answer")
 
-        # The agent returns a good result on the second attempt.
+        fake_msg = MagicMock()
+        fake_msg.tool_calls = [{
+            "name": "submit_sales_answer",
+            "args": good_answer.model_dump(),
+            "id": "call_1",
+        }]
+
         fake_agent = MagicMock()
         fake_agent.ainvoke = AsyncMock(
-            side_effect=[
-                validation_err,
-                {
-                    "structured_response": good_answer,
-                    "messages": [],
-                },
-            ]
+            return_value={
+                "messages": [fake_msg],
+            }
         )
 
         with patch("orchestration.graph.LLMFactory"), patch(
@@ -169,15 +165,7 @@ class TestPydanticAutoCorrectionLoop:
                 _run_sales_worker_agent("some rfp text", tools=[])
             )
 
-        assert answer == good_answer
-        assert fake_agent.ainvoke.call_count == 2
-
-        # Second call must carry a correction HumanMessage in its messages.
-        second_call_input = fake_agent.ainvoke.call_args_list[1].args[0]
-        messages_sent = second_call_input["messages"]
-        human_corrections = [m for m in messages_sent if isinstance(m, HumanMessage)]
-        assert human_corrections, "No HumanMessage correction found in second call"
-        assert "failed validation" in str(human_corrections[-1].content).lower()
+        assert answer.content == good_answer.content
 
 
 # ---------------------------------------------------------------------------

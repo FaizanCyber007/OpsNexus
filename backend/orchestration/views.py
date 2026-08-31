@@ -210,7 +210,7 @@ async def _query_gemini_llm(
     start_time = time.perf_counter()
     try:
         llm = LLMFactory().get_supervisor_llm()
-        result = await asyncio.wait_for(llm.ainvoke(prompt), timeout=30.0)
+        result = await asyncio.wait_for(llm.ainvoke(prompt), timeout=90.0)
         elapsed_ms = max(1, int((time.perf_counter() - start_time) * 1000))
         content = (
             result.content if hasattr(result, "content") else str(result)
@@ -389,7 +389,7 @@ class DocumentChatView(AuditLogContextMixin, APIView):
                         }
                     ],
                     "result": {
-                        "model_name": "Gemini Flash (gemini-2.5-flash)",
+                        "model_name": "Gemini Flash (gemini-3.6-flash)",
                         "provider": "gemini",
                         "response": (
                             "The aggregate liability is capped at 12 months "

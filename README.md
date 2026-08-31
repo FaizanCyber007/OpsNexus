@@ -10,7 +10,10 @@ The platform is architected as a production-grade monorepo featuring a high-perf
 
 ### 🧠 LangGraph Hierarchical Multi-Agent Swarm
 - **Supervisor Agent (Google Gemini 2.5 Flash)**: Ingests raw document context, classifies intent (`sales_rfp`, `invoice_reconciliation`, `compliance_audit`, `general_intake`), and orchestrates domain-specific worker sub-agents.
-- **Worker Sub-Agents (Groq LLaMA 3.3 / `openai/gpt-oss-120b`)**: Ultra-fast ReAct agent executing targeted tool loops, querying MCP knowledge servers, and synthesizing structured outputs.
+- **Worker Sub-Agents (Groq `openai/gpt-oss-120b`)**: Ultra-fast ReAct agents executing targeted tool loops, querying MCP knowledge servers, and synthesizing structured outputs. Includes three specialized workers:
+  - **Sales RFP Worker**: Synthesizes drafted responses and identifies risks using the `search_company_knowledge` tool.
+  - **Invoice Reconciliation Worker**: Reconciles incoming invoices against internal ledgers via the `get_open_purchase_orders` tool.
+  - **Compliance Auditor Worker**: Cross-references documents against policies via the `get_security_policies` tool to detect violations.
 - **Deterministic Fast-Path Router**: Sub-millisecond rule-based keyword/regex routing before LLM escalation.
 - **Production Guardrails & Auto-Correction**:
   - **Pydantic Auto-Correction Loops**: Catches schema validation failures (`ValidationError`) and feeds error context back to the model for self-correction up to `MAX_VALIDATION_LOOPS` (2) attempts.
@@ -19,7 +22,7 @@ The platform is architected as a production-grade monorepo featuring a high-perf
   - **Graceful Mock Fallbacks**: Simulated deterministic pipelines when API keys are absent in development.
 
 ### 🔌 Model Context Protocol (MCP 2.0)
-- **Standalone MCP Server** (`mcp_host/server.py`): Standards-compliant JSON-RPC 2.0 tool execution layer over `stdio` exposing company knowledge and internal pricing policies (`get_internal_pricing_policy`).
+- **Standalone MCP Server** (`mcp_host/server.py`): Standards-compliant JSON-RPC 2.0 tool execution layer over `stdio` exposing enterprise data and tools including `get_internal_pricing_policy`, `get_security_policies`, and `get_open_purchase_orders`.
 - **Zero Vendor Lock-In Client Bridge** (`mcp_host/client.py`): Decoupled MCP 2.0 transport client integrating external organizational tools into LangChain/LangGraph runnables without pinning legacy SDKs.
 
 ### 🔍 Dense Vector Memory & Multi-Format RAG
@@ -29,7 +32,7 @@ The platform is architected as a production-grade monorepo featuring a high-perf
 
 ### ⚔️ Interactive RAG Document Chat & Model Arena
 - **Grounded Conversational RAG**: In-app document Q&A with verifiable chunk-level citations and similarity scores.
-- **Model Arena (`compare=true`)**: Side-by-side concurrent execution comparing **Groq (LLaMA 3.3)** vs. **Google Gemini (2.5 Flash)** measuring roundtrip latency (ms), token consumption, and response accuracy.
+- **Model Arena (`compare=true`)**: Side-by-side concurrent execution comparing **Groq (`openai/gpt-oss-120b`)** vs. **Google Gemini (2.5 Flash)** measuring roundtrip latency (ms), token consumption, and response accuracy.
 - **Redis Response Caching**: Parameterized SHA-256 query caching with 15-minute TTL (`django-redis`) for sub-5ms repeated query responses.
 
 ### 🛡️ Enterprise Security, SOC2 Audit Logging & Rate Limiting
@@ -80,10 +83,12 @@ flowchart TD
         FastRouter{"Deterministic Fast Router"}
         Supervisor["Supervisor Agent (Gemini 2.5 Flash)"]
         Guardrails{"Pydantic Auto-Correction & Tenacity Retries"}
-        SalesWorker["Sales Worker Sub-Agent (Groq LLaMA 3.3)"]
+        SalesWorker["Sales Worker (Groq gpt-oss-120b)"]
+        InvoiceWorker["Invoice Worker (Groq gpt-oss-120b)"]
+        ComplianceWorker["Compliance Worker (Groq gpt-oss-120b)"]
         Fallback["Gemini Fallback Chain"]
         MCPClient["MCP Client Bridge (JSON-RPC)"]
-        MCPHost["MCP Tool Server (Internal Pricing & Knowledge)"]
+        MCPHost["MCP Tool Server (Company Policies & Ledgers)"]
     end
 
     subgraph Storage["Data, Cache & Observability Layer"]
@@ -99,10 +104,21 @@ flowchart TD
     FastRouter -->|Complex / Ambiguous| Supervisor
     Supervisor --> Guardrails
     Supervisor -->|sales_rfp| SalesWorker
+    Supervisor -->|invoice_reconciliation| InvoiceWorker
+    Supervisor -->|compliance_audit| ComplianceWorker
     SalesWorker --> Guardrails
+    InvoiceWorker --> Guardrails
+    ComplianceWorker --> Guardrails
     SalesWorker -->|On Groq Outage| Fallback
-    SalesWorker --> MCPClient --> MCPHost
+    InvoiceWorker -->|On Groq Outage| Fallback
+    ComplianceWorker -->|On Groq Outage| Fallback
+    SalesWorker --> MCPClient
+    InvoiceWorker --> MCPClient
+    ComplianceWorker --> MCPClient
+    MCPClient --> MCPHost
     SalesWorker -->|StructuredAnswer| PG
+    InvoiceWorker -->|InvoiceReconciliationResult| PG
+    ComplianceWorker -->|ComplianceAuditResult| PG
     Supervisor -->|Classification & Reasoning| PG
     
     ArenaUI -->|POST /api/v1/documents/:id/chat/| Throttle --> ChatAPI
@@ -127,7 +143,7 @@ flowchart TD
 | **Styling & Animation** | Tailwind CSS 4 + Framer Motion 13 + Three.js | Dark mode, micro-interactions & 3D background | ✅ Implemented |
 | **Agent Orchestration** | LangGraph 1.2 + LangChain Core | State machine graphs, cyclical routing & guardrails | ✅ Implemented |
 | **Supervisor LLM** | Google Gemini 2.5 Flash (`langchain-google-genai`) | High-reasoning document classification & routing | ✅ Implemented |
-| **Worker Sub-Agents** | Groq LLaMA 3.3 / `openai/gpt-oss-120b` (`langchain-groq`) | Ultra-fast ReAct tool execution & structured output | ✅ Implemented |
+| **Worker Sub-Agents** | Groq `openai/gpt-oss-120b` (`langchain-groq`) | Ultra-fast ReAct tool execution & structured output | ✅ Implemented |
 | **Tool Protocol** | Model Context Protocol (Anthropic `mcp` 2.0.0 SDK) | Decoupled JSON-RPC 2.0 tool execution layer | ✅ Implemented |
 | **Vector Database / RAG** | ChromaDB 1.5.9 + `sentence-transformers` 5.5 | Local dense embeddings (`all-MiniLM-L6-v2`) | ✅ Implemented |
 | **Relational Database** | PostgreSQL 16 (Alpine) + `psycopg3` | Multi-tenant document, run, trace & audit persistence | ✅ Implemented |
@@ -271,6 +287,12 @@ python manage.py createsuperuser
 
 # Start the Django development server
 python manage.py runserver 8000
+
+# IN A NEW TERMINAL: Start the RQ Worker (Required for processing documents!)
+# On Windows:
+python manage.py rqworker default --worker-class rq.worker.SimpleWorker
+# On macOS / Linux:
+python manage.py rqworker default
 ```
 *Backend runs at [http://localhost:8000](http://localhost:8000).*
 

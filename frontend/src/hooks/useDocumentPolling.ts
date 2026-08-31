@@ -10,6 +10,9 @@ const MAX_POLL_BACKOFF_MS = 15000;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const TERMINAL_STATUSES: Document["status"][] = ["completed", "failed"];
 
+/** Hard ceiling: stop polling after 5 minutes regardless of status. */
+const MAX_POLL_DURATION_MS = 5 * 60 * 1000;
+
 export function useDocumentPolling(
   documentId: string,
   onStatusChange?: (status: Document["status"]) => void,
@@ -28,6 +31,7 @@ export function useDocumentPolling(
     let timeoutId: ReturnType<typeof setTimeout>;
     let lastStatus: Document["status"] | null = null;
     let consecutiveFailures = 0;
+    const startTime = Date.now();
 
     async function poll() {
       try {
@@ -43,6 +47,13 @@ export function useDocumentPolling(
 
         if (TERMINAL_STATUSES.includes(result.status)) {
           setIsPolling(false);
+          return;
+        }
+
+        // Safety ceiling: stop polling if we've been going too long
+        if (Date.now() - startTime >= MAX_POLL_DURATION_MS) {
+          setIsPolling(false);
+          showError("Document processing is taking longer than expected.");
           return;
         }
 
